@@ -1,0 +1,165 @@
+Solution::path Solution::link_out_cl_in(path p, int out, int new_cl)
+	{
+		double fuel_remaining = 0;
+		double fuel_required = 0;
+		double fuel_on_arrival;
+		int new_cl_n1;
+		int new_cl_n2;
+
+		edge next_cl;
+		pair<int, int> dir_out;
+
+		edge edge_temp;
+		path path_temp = p;
+		path p_segment;
+
+		vector<edge> edge_vec;
+		list<edge> edge_list;
+		list<edge> new_edges;
+
+		path_temp.edges.clear();
+		path_temp.pCost = 0;
+		path_temp.fuelOnTarget.clear();
+
+		// Direção da CL de onde o robô está saindo
+		dir_out = getCLDirection(p, out);
+
+		// Escolhe qual nó da nova CL está mais próximo de 'out'
+		double fuel_out_to_new_cl_n1 = getCostOnGraph(p.robotID, dir_out.second, new_cl);
+		double fuel_out_to_new_cl_n2 = getCostOnGraph(p.robotID, dir_out.second, new_cl + 1);
+
+		fuel_required = std::min(fuel_out_to_new_cl_n1, fuel_out_to_new_cl_n2);
+
+		if (fuel_out_to_new_cl_n1 < fuel_out_to_new_cl_n2)
+		{
+			new_cl_n1 = new_cl;
+			new_cl_n2 = new_cl + 1;
+		}
+		else
+		{
+			new_cl_n1 = new_cl + 1;
+			new_cl_n2 = new_cl;
+		}
+
+		// Cria a ligação entre a CL atual e a nova CL
+		edge_temp = {dir_out.second, new_cl_n1};
+		edge_temp.time = getCostOnGraph(p.robotID, edge_temp.node_a, edge_temp.node_b);
+		edge_temp.cost = edge_temp.time + edge_temp.time * input.getRobotProp(p.robotID);
+		edge_vec.emplace_back(edge_temp);
+		new_edges.emplace_back(edge_temp);
+
+		// Adiciona a nova CL (new_cl_n1 -> new_cl_n2)
+		edge_temp = {new_cl_n1, new_cl_n2};
+		edge_temp.time = getCostOnGraph(p.robotID, edge_temp.node_a, edge_temp.node_b);
+		edge_temp.cost = edge_temp.time + edge_temp.time * input.getRobotProp(p.robotID);
+		edge_vec.emplace_back(edge_temp);
+		new_edges.emplace_back(edge_temp);
+
+		// Verifica se há próxima CL após a atual
+		next_cl = GetNextCL(p, dir_out.first);
+		if (next_cl.cost > 0)
+		{
+			// Liga nova CL à próxima
+			edge_temp = {new_cl_n2, next_cl.node_a};
+			edge_temp.time = getCostOnGraph(p.robotID, edge_temp.node_a, edge_temp.node_b);
+			edge_temp.cost = edge_temp.time + edge_temp.time * input.getRobotProp(p.robotID);
+			edge_vec.emplace_back(edge_temp);
+			new_edges.emplace_back(edge_temp);
+
+			// Adiciona a próxima CL
+			edge_temp = next_cl;
+			edge_vec.emplace_back(edge_temp);
+			new_edges.emplace_back(edge_temp);
+
+			// Adiciona caminho até próximo posto após próxima CL
+			path next_cl_to_next_depot = GetPathFromEdgeToNextDepot(p, next_cl);
+			for (const auto &e : next_cl_to_next_depot.edges)
+			{
+				edge_vec.emplace_back(e);
+				new_edges.emplace_back(e);
+			}
+		}
+		else
+		{
+			// Retorna para a base se não houver próxima CL
+			edge_temp = {new_cl_n2, input.getRobotBaseId(p.robotID)};
+			edge_temp.time = getCostOnGraph(p.robotID, edge_temp.node_a, edge_temp.node_b);
+			edge_temp.cost = edge_temp.time + edge_temp.time * input.getRobotProp(p.robotID);
+			edge_vec.emplace_back(edge_temp);
+			new_edges.emplace_back(edge_temp);
+		}
+
+		auto it_new_edges = new_edges.begin();
+		while (!new_edges.empty())
+		{
+			// Obtém combustível restante no nó de partida
+			auto it_fuel = p.fuelOnTarget.find(it_new_edges->node_a);
+			fuel_remaining = (it_fuel != p.fuelOnTarget.end()) ? it_fuel->second : input.getRobotFuel(p.robotID);
+
+			fuel_required = it_new_edges->time;
+			fuel_on_arrival = fuel_remaining - fuel_required;
+
+			if (fuel_required > input.getRobotFuel(p.robotID))
+			{
+				path_temp.pCost = -1;
+				return path_temp;
+			}
+
+			// Caso necessite de abastecimento
+			if (fuel_on_arrival < 0.0)
+			{
+				if (!IsCLine(it_new_edges->node_a, it_new_edges->node_b))
+				{
+					p_segment = GetSPTOverOpenDepots(p, it_new_edges->node_a, it_new_edges->node_b);
+					if (p_segment.edges.empty())
+					{
+						path_temp.pCost = -1;
+						return path_temp;
+					}
+					path_temp.pCost += p_segment.pCost;
+					edge_list.insert(edge_list.end(), p_segment.edges.begin(), p_segment.edges.end());
+				}
+				else
+				{
+					if (edge_list.empty())
+					{
+						path_temp.pCost = -1;
+						return path_temp;
+					}
+					path_temp.pCost -= edge_list.back().cost;
+					p_segment = GetSPTOverOpenDepots(p, edge_list.back().node_a, edge_list.back().node_b);
+					if (p_segment.edges.empty())
+					{
+						path_temp.pCost = -1;
+						return path_temp;
+					}
+					path_temp.pCost += p_segment.pCost;
+					edge_list.pop_back();
+					edge_list.insert(edge_list.end(), p_segment.edges.begin(), p_segment.edges.end());
+
+					edge_temp = *it_new_edges;
+					edge_temp.time = getCostOnGraph(p.robotID, edge_temp.node_a, edge_temp.node_b);
+					edge_temp.cost = edge_temp.time + edge_temp.time * input.getRobotProp(p.robotID);
+					edge_list.emplace_back(edge_temp);
+					path_temp.pCost += edge_temp.cost;
+				}
+			}
+			else
+			{
+				if (input.isTarget(it_new_edges->node_b))
+				{	
+					p.fuelOnTarget[it_new_edges->node_b] = fuel_on_arrival;
+				}
+				edge_list.emplace_back(*it_new_edges);
+				path_temp.pCost += it_new_edges->cost;
+			}
+			new_edges.pop_front();
+			it_new_edges = new_edges.begin();
+		}
+
+		path_temp.fuelOnTarget = p.fuelOnTarget;
+		path_temp.edges.insert(path_temp.edges.begin(), edge_list.begin(), edge_list.end());
+		path_temp.targetsNum = path_temp.fuelOnTarget.size();
+
+		return path_temp;
+	}

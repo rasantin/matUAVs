@@ -1,0 +1,257 @@
+Solution::path Solution::link_out_cl_in(path p, int out, int new_cl){
+	double fuel_remaining = 0;
+	double fuel_required =0;
+	double fuel_on_arrival;
+	int new_cl_n1; // nó de entra da cl
+	int new_cl_n2; // nó de saída
+	edge next_cl;
+	pair<int,int> dir_out;
+
+	edge edge_temp;
+	path path_temp = p;
+	path p_segment;
+
+	vector<edge> edge_vec;
+	list<edge> edge_list;
+	list<edge> new_edges;
+
+	path_temp.edges.clear();
+	path_temp.pCost = 0;
+	path_temp.fuelOnTarget.clear();
+
+	//obter a direção da linha de cobertura de saída
+	dir_out = getCLDirection(p,out);
+
+
+	//descobrir qual nó da nova linha de cobertura está mais próximo de out
+	double fuel_out_to_new_cl_n1 = getCostOnGraph(p.robotID,dir_out.second,new_cl);
+	double fuel_out_to_new_cl_n2 = getCostOnGraph(p.robotID,dir_out.second,new_cl+1);
+
+	//combustível necessário para sair de out e atingir o nó mais próximo de new_cl;
+	fuel_required =  isDefinitelyLessThan(fuel_out_to_new_cl_n1,fuel_out_to_new_cl_n2)?
+			fuel_out_to_new_cl_n1 : fuel_out_to_new_cl_n2;
+
+	//obter o nó da nova linha de cobertura mais próximo do nó out.
+	if(isDefinitelyLessThan(fuel_out_to_new_cl_n1,fuel_out_to_new_cl_n2)){
+		new_cl_n1 = new_cl;
+		new_cl_n2 = new_cl + 1;
+	}
+	else{
+		new_cl_n1 = new_cl + 1;
+		new_cl_n2 = new_cl;
+	}
+
+	//linha de cobertura anterior a nova linha de cobertura
+	edge_temp.node_a = dir_out.second;
+	edge_temp.node_b = new_cl_n1;
+	edge_temp.time =  getCostOnGraph(p.robotID,edge_temp.node_a ,edge_temp.node_b);
+	edge_temp.cost =  edge_temp.time + (edge_temp.time  *  input.getRobotProp(p.robotID));
+	edge_vec.emplace_back(edge_temp);
+	new_edges.emplace_back(edge_temp);
+
+	//nova linha de cobertura direcionada de n1 a n2
+	edge_temp.node_a = new_cl_n1;
+	edge_temp.node_b = new_cl_n2;
+	edge_temp.time =  getCostOnGraph(p.robotID,edge_temp.node_a ,edge_temp.node_b);
+	edge_temp.cost =  edge_temp.time + (edge_temp.time  *  input.getRobotProp(p.robotID));
+	edge_vec.emplace_back(edge_temp);
+	new_edges.emplace_back(edge_temp);
+
+	//obter a próxima linha de cobertura, antiga ligação com out
+	next_cl = GetNextCL(p, dir_out.first);
+
+	//se existir próxima linha de cobertura
+	if(next_cl.cost > 0){
+
+		//linha que liga a nova linha de cobertura à proxima linha
+		edge_temp.node_a = new_cl_n2;
+		edge_temp.node_b = next_cl.node_a;
+		edge_temp.time =  getCostOnGraph(p.robotID,edge_temp.node_a ,edge_temp.node_b);
+		edge_temp.cost =  edge_temp.time + (edge_temp.time  *  input.getRobotProp(p.robotID));
+		edge_vec.emplace_back(edge_temp);
+		new_edges.emplace_back(edge_temp);
+
+
+		//linha de cobertura posterior a linha de cobertua
+		edge_temp.node_a = next_cl.node_a;
+		edge_temp.node_b = next_cl.node_b;
+		edge_temp.time =  getCostOnGraph(p.robotID,edge_temp.node_a ,edge_temp.node_b);
+		edge_temp.cost =  edge_temp.time + (edge_temp.time  *  input.getRobotProp(p.robotID));
+		edge_vec.emplace_back(edge_temp);
+		new_edges.emplace_back(edge_temp);
+
+		//obter o caminho após a linha de cobetura em questão, até o próximo abastecimento.
+		path next_cl_to_next_depot = GetPathFromEdgeToNextDepot(p,next_cl);
+		for(auto e:next_cl_to_next_depot.edges){
+			edge_vec.emplace_back(e);
+			new_edges.emplace_back(e);
+		}
+	}
+	else{//caso a linha contendo o nó out seja a última inserir um aresta retornando para a base
+		edge_temp.node_a = new_cl_n2;
+		edge_temp.node_b = input.getRobotBaseId(p.robotID);
+		edge_temp.time =  getCostOnGraph(p.robotID,edge_temp.node_a ,edge_temp.node_b);
+		edge_temp.cost =  edge_temp.time + (edge_temp.time  *  input.getRobotProp(p.robotID));
+		edge_vec.emplace_back(edge_temp);
+		new_edges.emplace_back(edge_temp);
+	}
+	auto it_new_edges = new_edges.begin();
+	auto it_fuel = p.fuelOnTarget.begin();
+	while(!new_edges.empty()){
+
+		it_fuel = p.fuelOnTarget.find(it_new_edges->node_a);
+		if(it_fuel != path_temp.fuelOnTarget.end())
+			fuel_remaining = it_fuel->second;
+
+		fuel_required = it_new_edges->time;
+		fuel_on_arrival = fuel_remaining - fuel_required;
+
+		//se o robô não tiver capacidade para percorrer o caminho
+		if(fuel_required > input.getRobotFuel(path_temp.robotID)){
+			path_temp.pCost = -1; //inviável
+			return path_temp;
+		}
+
+		//inserir o abastecimento no posto associado ao nó out
+		if(isDefinitelyLessThan(fuel_on_arrival,0.0)){//se o robô não tem combustível suficiente
+			//se for link entre linhas de cobertura, não coverage line
+			if(!IsCLine(it_new_edges->node_a,it_new_edges->node_b)){
+				//obter o segmento do menor caminho possível lingando node_a e node_b
+				//passando pelos postos.
+				p_segment = GetSPTOverOpenDepots(p,it_new_edges->node_a,it_new_edges->node_b);
+
+				if(p_segment.edges.empty()){
+					path_temp.pCost = -1;
+					return path_temp;
+				}
+
+				//atualizar o custo do segmento em path_temp;
+				path_temp.pCost += p_segment.pCost;
+
+				//inserir as arestas do segmento na lista de arestas
+				edge_list.insert(edge_list.end(),p_segment.edges.begin(),p_segment.edges.end());
+
+				//atualizar o vetor de combustível em cada target
+				for(auto fuel_segment : p_segment.fuelOnTarget){
+					it_fuel = p.fuelOnTarget.find(fuel_segment.first);
+					if(it_fuel != p.fuelOnTarget.end())
+						it_fuel->second = fuel_segment.second;
+					else
+						p.fuelOnTarget.emplace(fuel_segment.first,fuel_segment.second);
+				}
+			}
+			else{//se for linha de cobertura
+				//auto edge_list_temp = edge_list;
+				//desviar a aresta anterior para o posto associado ao primeiro nó da nova linha de cobertura
+
+				path_temp.pCost -= edge_list.back().cost;//remover o custo antigo da variável de custo
+
+				//edge_list.back().node_b = input.getDepotIdOnTarget(it_new_edges->node_a);
+				//obter o segmento o menor caminho possível lingando node_a e node_b
+				p_segment = GetSPTOverOpenDepots(p,edge_list.back().node_a,edge_list.back().node_b);
+
+				if(p_segment.edges.empty()){
+					path_temp.pCost = -1;
+					return path_temp;
+				}
+
+				path_temp.pCost += p_segment.pCost;
+
+				//remove a tentative anterior, que é inviável para a capacidade do robô
+				edge_list.pop_back();
+				//inserir as arestas do segmento na lista de aresta
+				edge_list.insert(edge_list.end(),p_segment.edges.begin(),p_segment.edges.end());
+
+				//atualizar o vetor de combustível em cada target
+				for(auto fuel_segment : p_segment.fuelOnTarget){
+					it_fuel = p.fuelOnTarget.find(fuel_segment.first);
+					if(it_fuel != p.fuelOnTarget.end())
+						it_fuel->second = fuel_segment.second;
+					else
+						p.fuelOnTarget.emplace(fuel_segment.first,fuel_segment.second);
+				}
+
+				//inserir a linha de cobertura
+				edge_temp.node_a = it_new_edges->node_a;
+				edge_temp.node_b = it_new_edges->node_b;
+				edge_temp.time =  getCostOnGraph(p.robotID,edge_temp.node_a ,edge_temp.node_b);
+				edge_temp.cost =  edge_temp.time + (edge_temp.time  *  input.getRobotProp(p.robotID));
+				edge_list.emplace_back(edge_temp);
+				path_temp.pCost += edge_temp.cost;
+
+				//obter o combustível restante no nó de partida node_a.
+				it_fuel = p.fuelOnTarget.find(edge_temp.node_a);
+				if(it_fuel != p.fuelOnTarget.end())
+					fuel_remaining =  it_fuel->second;
+
+				// combustível necessário para o deslocamento
+				fuel_required = edge_temp.time;
+				//combustível que restará no robô após o deslocamento
+				fuel_on_arrival = fuel_remaining - fuel_required;
+
+				//se o combustível necessário para cobrir a aresta for insuficiente
+				if(isDefinitelyLessThan(fuel_on_arrival,0.0)){
+					path_temp.pCost = -1;
+					return path_temp;
+				}
+
+				//atualizar o combustível em node_b após o deslocamento
+				it_fuel = p.fuelOnTarget.find(edge_temp.node_b);
+				if(it_fuel != p.fuelOnTarget.end())//se o target já existir em fuelontarget
+					it_fuel->second = fuel_on_arrival;
+				else// caso o nó não tenha sido alterado
+					p.fuelOnTarget.emplace(edge_temp.node_b,fuel_on_arrival);
+			}
+
+		}
+		else{
+
+			if(input.isTarget(it_new_edges->node_b)){
+				it_fuel = p.fuelOnTarget.find(it_new_edges->node_b);
+				if(it_fuel != p.fuelOnTarget.end())
+					it_fuel->second = fuel_on_arrival;
+				else//caso não tenha o target na lista
+				   p.fuelOnTarget.emplace(it_new_edges->node_b, fuel_on_arrival);
+			}
+
+			//edge_list.emplace_back(*it_edge);
+			edge_list.push_back(*it_new_edges);
+			path_temp.pCost += it_new_edges->cost;
+
+		}
+		//remover o elemento processado
+		new_edges.pop_front();
+		//atualizar o iterator para o novo início da lista
+		it_new_edges = new_edges.begin();
+		//++it_new_edges;
+	}
+
+	path_temp.fuelOnTarget = p.fuelOnTarget;
+	path_temp.edges.insert(path_temp.edges.begin(),edge_list.begin(),edge_list.end());
+	path_temp.targetsNum = path_temp.fuelOnTarget.size();
+
+	return path_temp;
+}
+
+Solution::path Solution::GetPathFromEdgeToNextDepot(path p, edge edge_cl){
+	path path_temp;
+
+	bool found_node = false;
+	vector<edge> edges_vec;
+
+	for(auto edge:p.edges){
+		//ao encontrar a linha de cobertura
+		if(!found_node && (edge.node_a == edge_cl.node_a && edge.node_b == edge_cl.node_b)){
+			found_node = true;
+			continue;
+		}
+		if(found_node){//obter todas as aresta até encontrar uma que liga um depot
+			edges_vec.emplace_back(edge);
+			auto it_depot = p.depots.find(edge.node_b);
+			if(it_depot != p.depots.end())
+				break;
+		}
+	}
+	path_temp.edges = edges_vec;
+	return path_temp;
+}

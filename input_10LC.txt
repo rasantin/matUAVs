@@ -1,0 +1,51 @@
+@base
+Base_1@2337.5 -50
+
+@target
+425 0
+425 15923.27
+850 0
+850 13532.19
+1275 0
+1275 16142.09
+1700 0
+1700 12956.84
+2125 0
+2125 15897.44
+2550 0
+2550 13915.47
+2975 0
+2975 15966.07
+3400 0
+3400 13161.44
+3825 0
+3825 13826.86
+4250 0
+4250 12751.45
+
+@robots_configuration
+configId:Config_2
+maxVel:16
+maxFuel:1800
+prop:2
+configId:Config_1
+maxVel:15
+maxFuel:1200
+prop:3
+
+@robot
+robotId:Robot_1
+configId:Config_2
+
+robotId:Robot_2
+configId:Config_1
+
+
+@robot_base
+Robot_1@Base_1
+Robot_2@Base_1
+
+@param
+nexec:1
+m:10
+n:20

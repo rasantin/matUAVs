@@ -1,0 +1,5 @@
+Depots|Largest paths cost|Robot ID
+2;6280.71;2
+from to f
+0;34;3140.35
+34;0;3140.35

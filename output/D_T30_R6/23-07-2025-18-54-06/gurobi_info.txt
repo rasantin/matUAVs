@@ -1,0 +1,13 @@
+call_id;model_type;optimize_time;feasible;target_num;depot_num
+1;normal;110;1;6;6
+2;normal;75;1;6;6
+3;normal;9;1;6;6
+4;normal;5;1;4;4
+5;normal;2;1;4;4
+6;normal;3;1;4;4
+7;normal;98;1;6;16
+8;normal;49;1;6;16
+9;normal;42;1;6;16
+10;normal;39;1;4;16
+11;normal;76;1;4;16
+12;normal;18;1;4;16

@@ -1,0 +1,24 @@
+Algorithm: main.exe
+Instance: D_T30_R6.txt
+Number of executions: 15
+Number of current execution: 9
+M: 1
+N: 50
+Max Coverage Lines on subset: 5
+Targets Nodes: 30
+Execution Time: 16.1219
+Date: 23-07-2025-19-05-24
+All Solutions Validated: true
+Depots|Largest path cost| Total cost
+4;13682.3;78699.7
+Solution Validated: true
+3;14908.9;84091
+Solution Validated: true
+5;13325.2;76759
+Solution Validated: true
+7;12442;72959.4
+Solution Validated: true
+13;12271.1;68451.8
+Solution Validated: true
+6;12890.7;72950.5
+Solution Validated: true

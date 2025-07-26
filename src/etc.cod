@@ -1,0 +1,732 @@
+testes da ordenação
+
+
+	edge edge_test;
+
+	p->edges.clear();
+
+	edge_test.node_a =0;
+	edge_test.node_b =33;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =33;
+	edge_test.node_b =29;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =29;
+	edge_test.node_b =3;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =3;
+	edge_test.node_b =4;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =4;
+	edge_test.node_b =2;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =2;
+	edge_test.node_b =1;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =1;
+	edge_test.node_b =29;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =29;
+	edge_test.node_b =5;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =5;
+	edge_test.node_b =6;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =6;
+	edge_test.node_b =8;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =8;
+	edge_test.node_b =7;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =7;
+	edge_test.node_b =33;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =33;
+	edge_test.node_b =9;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =9;
+	edge_test.node_b =10;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =10;
+	edge_test.node_b =0;
+	p->edges.emplace_back(edge_test);
+
+	/*
+
+	--------------------------------------------------
+
+		edge_test.node_a =0;
+		edge_test.node_b =1;
+		p->edges.emplace_back(edge_test);
+
+
+		edge_test.node_a =1;
+		edge_test.node_b =2;
+		p->edges.emplace_back(edge_test);
+
+
+		edge_test.node_a =2;
+		edge_test.node_b =3;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =3;
+		edge_test.node_b =4;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =4;
+		edge_test.node_b =4;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =4;
+		edge_test.node_b =1;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =1;
+		edge_test.node_b =5;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =5;
+		edge_test.node_b =6;
+		p->edges.emplace_back(edge_test);
+
+
+		edge_test.node_a =6;
+		edge_test.node_b =4;
+		p->edges.emplace_back(edge_test);
+
+
+		edge_test.node_a =4;
+		edge_test.node_b =7;
+		p->edges.emplace_back(edge_test);
+
+
+		edge_test.node_a =7;
+		edge_test.node_b =8;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =8;
+		edge_test.node_b =0;
+		p->edges.emplace_back(edge_test);
+-----------------------------------------------------------------------
+
+
+
+
+
+		edge_test.node_a =0;
+		edge_test.node_b =15;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =15;
+		edge_test.node_b =16;
+		p->edges.emplace_back(edge_test);
+
+
+		edge_test.node_a =16;
+		edge_test.node_b =38;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =38;
+		edge_test.node_b =24;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =24;
+		edge_test.node_b =23;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =23;
+		edge_test.node_b =0;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =38;
+		edge_test.node_b =14;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =14;
+		edge_test.node_b =13;
+		p->edges.emplace_back(edge_test);
+
+
+		edge_test.node_a =13;
+		edge_test.node_b =31;
+		p->edges.emplace_back(edge_test);
+
+
+		edge_test.node_a =38;
+		edge_test.node_b = 4;
+		p->edges.emplace_back(edge_test);
+
+
+		edge_test.node_a =4;
+		edge_test.node_b =3;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =3;
+		edge_test.node_b =31;
+		p->edges.emplace_back(edge_test);
+
+
+		edge_test.node_a =31;
+		edge_test.node_b =38;
+		p->edges.emplace_back(edge_test);
+
+
+		edge_test.node_a =31;
+		edge_test.node_b =1;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =1;
+		edge_test.node_b =2;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =2;
+		edge_test.node_b =38;
+		p->edges.emplace_back(edge_test);
+
+//-----------------------------------------------------------------------
+
+edge_test.node_a =0;
+	edge_test.node_b =13;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =13;
+	edge_test.node_b =14;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =14;
+	edge_test.node_b =15;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =15;
+	edge_test.node_b =43;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =43;
+	edge_test.node_b =60;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =43;
+	edge_test.node_b =17;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =17;
+	edge_test.node_b =18;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =18;
+	edge_test.node_b =43;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =43;
+	edge_test.node_b =45;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =45;
+	edge_test.node_b =21;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =45;
+	edge_test.node_b =43;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =45;
+	edge_test.node_b =19;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =19;
+	edge_test.node_b =20;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =20;
+	edge_test.node_b =45;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =21;
+	edge_test.node_b =22;
+	p->edges.emplace_back(edge_test);
+
+
+
+	edge_test.node_a =22;
+	edge_test.node_b =47;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =47;
+	edge_test.node_b =23;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =23;
+	edge_test.node_b =24;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =24;
+	edge_test.node_b =0;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =47;
+	edge_test.node_b =25;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =25;
+	edge_test.node_b =26;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =26;
+	edge_test.node_b =45;
+	p->edges.emplace_back(edge_test);
+
+
+
+	edge_test.node_a =47;
+	edge_test.node_b =60;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =60;
+	edge_test.node_b =32;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =32;
+	edge_test.node_b =33;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =33;
+	edge_test.node_b =47;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =60;
+	edge_test.node_b =47;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =60;
+	edge_test.node_b =29;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =29;
+	edge_test.node_b =30;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =30;
+	edge_test.node_b =31;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =31;
+	edge_test.node_b =60;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =60;
+	edge_test.node_b =27;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =27;
+	edge_test.node_b =28;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =28;
+	edge_test.node_b =60;
+	p->edges.emplace_back(edge_test);
+------------------------------------------------------------------------------------------
+p->edges.clear();
+
+	edge_test.node_a =0;
+		edge_test.node_b =13;
+		p->edges.emplace_back(edge_test);
+
+
+		edge_test.node_a =13;
+		edge_test.node_b =14;
+		p->edges.emplace_back(edge_test);
+
+
+		edge_test.node_a =14;
+		edge_test.node_b =24;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =24;
+		edge_test.node_b =23;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =23;
+		edge_test.node_b =45;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =45;
+		edge_test.node_b =21;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =21;
+		edge_test.node_b =22;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =22;
+		edge_test.node_b =26;
+		p->edges.emplace_back(edge_test);
+
+
+		edge_test.node_a =26;
+		edge_test.node_b =10;
+		p->edges.emplace_back(edge_test);
+
+
+		edge_test.node_a =10;
+		edge_test.node_b =0;
+		p->edges.emplace_back(edge_test);
+
+
+		edge_test.node_a =45;
+		edge_test.node_b =43;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =43;
+		edge_test.node_b =17;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a = 17;
+		edge_test.node_b =18;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =18;
+		edge_test.node_b =20;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =20;
+		edge_test.node_b =19;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =19;
+		edge_test.node_b =43;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =43;
+		edge_test.node_b =45;
+		p->edges.emplace_back(edge_test);
+
+
+		edge_test.node_a =26;
+		edge_test.node_b =4;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =4;
+		edge_test.node_b =3;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =3;
+		edge_test.node_b =27;
+		p->edges.emplace_back(edge_test);
+
+		edge_test.node_a =27;
+		edge_test.node_b =26;
+		p->edges.emplace_back(edge_test);
+
+
+
+*/
+void Graph::UpdateDepots(int id,vector<int> depots){
+	nodesSets[id].depots.clear();
+	nodesSets[id].depots = depots;
+
+	//sort(depots.begin(),depots.end());
+	//se necessário atualizar os subsets
+	auto it_ns = nodesSets[id].sub_set.begin();
+	int subset_id =0;
+	while(it_ns != nodesSets[id].sub_set.end()){
+		//criar vetor com a capacidade do sub set
+		/*vector<int> v(nodesSets[id].sub_set[subset_id].depots.size());
+		vector<int>::iterator it;
+
+		sort(nodesSets[id].sub_set[subset_id].depots.begin(),
+				nodesSets[id].sub_set[subset_id].depots.end());
+
+		it = set_intersection(depots.begin(),depots.end(),nodesSets[id].sub_set[subset_id].depots.begin(),
+				nodesSets[id].sub_set[subset_id].depots.end(),v.begin());
+		v.resize(it-v.begin());
+		nodesSets[id].sub_set[subset_id].depots.clear();
+		nodesSets[id].sub_set[subset_id].depots = v;*/
+
+		UpdateDepotsOnSubSet(id,subset_id,depots);
+		++it_ns;
+		++subset_id;
+	}
+}
+
+
+while(!set_order.empty()){
+		while(it_path!=vec_sol.paths.end()){
+
+			if(!union_paths.edges.empty())
+				if(union_paths.edges.front().node_a != 0)
+					cout << "problema Union" << endl;
+
+			if(it_path->edges.front().node_b == set_order.front().first.first.node_b){
+				union_paths.edges.insert(union_paths.edges.end(),it_path->edges.begin(),it_path->edges.end());
+				union_paths.fuelOnTarget.insert(it_path->fuelOnTarget.begin(),it_path->fuelOnTarget.end());
+				union_paths.robotID = it_path->robotID;
+				union_paths.depots.insert(it_path->depots.begin(),it_path->depots.end());
+				vec_sol.paths.erase(it_path);
+				set_order.pop_front();
+				it_path = vec_sol.paths.begin();
+
+				union_paths_temp = union_paths;
+				if(!first){
+					cout << "link node: " <<out << "to node: " << in <<endl;
+					union_paths = Link_Sets_Node_out_in(union_paths,out,in);
+				}
+
+				out = union_paths.edges.back().node_a;
+				in =set_order.front().first.first.node_b;
+
+				first = false;
+
+
+				if(union_paths.edges.front().node_a != 0)
+						cout << "problema Union" << endl;
+				continue;
+			}
+			it_path++;
+		}
+	}
+---------------------------------------------------------------------------------------------------------------
+
+	edge edge_test;
+
+	p->edges.clear();
+
+	edge_test.node_a =89;
+	edge_test.node_b =19;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =19;
+	edge_test.node_b =20;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =20;
+	edge_test.node_b =88;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =88;
+	edge_test.node_b =18;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =18;
+	edge_test.node_b =17;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a = 17;
+	edge_test.node_b =89;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =0;
+	edge_test.node_b =101;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =101;
+	edge_test.node_b =31;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =31;
+	edge_test.node_b =32;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =32;
+	edge_test.node_b =22;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =22;
+	edge_test.node_b =21;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =21;
+	edge_test.node_b =89;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =89;
+	edge_test.node_b =23;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =23;
+	edge_test.node_b =24;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =24;
+	edge_test.node_b =100;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =100;
+	edge_test.node_b =26;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =26;
+	edge_test.node_b =25;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =25;
+	edge_test.node_b =97;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =97;
+	edge_test.node_b =27;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =27;
+	edge_test.node_b =28;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =28;
+	edge_test.node_b =110;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =110;
+	edge_test.node_b =52;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =52;
+	edge_test.node_b =51;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =51;
+	edge_test.node_b =121;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =121;
+	edge_test.node_b =47;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =47;
+	edge_test.node_b =48;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =48;
+	edge_test.node_b =46;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =88;
+	edge_test.node_b =14;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =14;
+	edge_test.node_b =13;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =46;
+	edge_test.node_b =45;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =13;
+	edge_test.node_b =83;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =45;
+	edge_test.node_b =115;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =121;
+	edge_test.node_b =49;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =115;
+	edge_test.node_b =43;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =110;
+	edge_test.node_b =54;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =83;
+	edge_test.node_b =15;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =15;
+	edge_test.node_b =16;
+	p->edges.emplace_back(edge_test);
+
+
+	edge_test.node_a =43;
+	edge_test.node_b =44;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =49;
+	edge_test.node_b =50;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =54;
+	edge_test.node_b =53;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =16;
+	edge_test.node_b =88;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =44;
+	edge_test.node_b =110;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =50;
+	edge_test.node_b =0;
+	p->edges.emplace_back(edge_test);
+
+	edge_test.node_a =53;
+	edge_test.node_b =121;
+	p->edges.emplace_back(edge_test);
+
+
+	
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

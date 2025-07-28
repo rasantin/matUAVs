@@ -40,6 +40,12 @@ namespace std
 			{
 				if (where == GRB_CB_MIPSOL)
 				{
+					// 1. Recupera solução atual
+					// 2. Identifica subconjuntos desconectados (subtours)
+					// 3. Para cada subconjunto sem a base, adiciona restrição lazy
+					//    para forçar ligação com o restante do grafo
+					// 4. Libera memória alocada
+
 					// Found an integer feasible solution - does it visit every node?
 					double **x = new double *[n];
 					int i, j;
@@ -484,9 +490,7 @@ namespace std
 			model.set(GRB_IntParam_LazyConstraints, 1);
 
 			// model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
-			GRBVar *Elem = 0;
-
-			Elem = model.addVars(2);
+			GRBVar *Elem = new GRBVar[2];
 
 			Elem[0] = model.addVar(0, GRB_INFINITY, 0.0, GRB_CONTINUOUS, "Pmax");
 			Elem[1] = model.addVar(0, D - 1, 0.0, GRB_INTEGER, "Dmax");
@@ -517,24 +521,23 @@ namespace std
 			for (i = 0; i < N; i++)
 				vars_x[i] = new GRBVar[N];
 
-			GRBVar *vars_d = new GRBVar[D - 1];
+			GRBVar *vars_d = nullptr;
+			if (D > 1)
+				vars_d = new GRBVar[D - 1];
 
-			// Create decision variables x_ijk for all edges ...alteração do upper bound de T para 1
-			/*for (i = 0; i < N; i++)
-			{
-				for (j = 0; j < N; j++)
-				{ // depot to depot
-					vars_x[i][j] = model.addVar(0, 1, 0, GRB_BINARY, "x_i_" + itos(i) + "_j_" + itos(j));
-				}
-			}*/
+			// Create decision variables x_ijk for all edges except self-loops (i != j)
 			for (i = 0; i < N; i++)
 			{
 				for (j = 0; j < N; j++)
+				{
+					//if (i != j)
 					vars_x[i][j] = model.addVar(0, 1, 0, GRB_BINARY, "x_i_" + itos(i) + "_j_" + itos(j));
+				}
 			}
-
-			// GRBVar vars_z[N][N];
-			vector<vector<GRBVar>> vars_z(N, vector<GRBVar>(N));
+			// Create decision variables z_ij for all edges (including self-loops)
+			GRBVar **vars_z = new GRBVar *[N];
+			for (i = 0; i < N; i++)
+				vars_z[i] = new GRBVar[N];
 			for (i = 0; i < N; i++)
 			{
 				for (j = 0; j < N; j++)
@@ -542,22 +545,24 @@ namespace std
 					vars_z[i][j] = model.addVar(-GRB_INFINITY, GRB_INFINITY, 0.0, GRB_CONTINUOUS, "z_i" + itos(i) + "_j_" + itos(j));
 				}
 			}
-
-			// GRBVar vars_d[D-1];
+			// Create decision variables d_i for depots (D-1 depots, excluding base)
 			for (i = 0; i < D - 1; i++)
 			{
 				vars_d[i] = model.addVar(0.0, 1.0, 0, GRB_BINARY, "d_" + itos(i));
 			}
 
 			/******************** Constraints *****************/
-			// Constraint 1: SUM SUM(1+ q_k)c_ij * x_ijk <= Pmax  k=0, ..., M-1
+			// Constraint 1: SUM_{i,j} (1 + q_k) * c_ij * x_ij <= Pmax, for all nodes i, j (robotID is fixed)
 			GRBLinExpr rest1 = 0;
 			for (i = 0; i < N; i++)
 			{
-				if (i != j)
+				for (j = 0; j < N; j++)
 				{
-					for (j = 0; j < N; j++)
-						rest1 += (getCost(i, j) * vars_x[i][j]) + (input.getRobotProp(robotID) * getCost(i, j) * vars_x[i][j]);
+					if (i != j)
+					{
+						double cost_ij = getCost(i, j);
+						rest1 += (cost_ij * vars_x[i][j]) + (input.getRobotProp(robotID) * cost_ij * vars_x[i][j]);
+					}
 				}
 			}
 			string s = "Rest1";
@@ -647,168 +652,144 @@ namespace std
 				model.addConstr(rest8 == 1, s);
 			}
 
-			// Constraint 9
-			/*GRBLinExpr rest9 = 0;
-			for (int i = 0; i < N; i++)
-			{ // cada target
-				// skip self_loop
-				rest9 += vars_x[i][i];
-			}
-			model.addConstr(rest9 == 0, "Rest9");*/
-
-			// Constraint 10: SUM z_ij - SUM z_ji = SUM f_ij * x_ij, sendo i  qualquer target
+			//-----------------------Fuel restriction---------------------------------------------
+			// Constraint 9: SUM z_ij - SUM z_ji = SUM f_ij * x_ij, sendo i  qualquer target
 			for (i = D; i < N; i++)
 			{
-				GRBLinExpr rest10_1 = 0;
-				GRBLinExpr rest10_2 = 0;
-				GRBLinExpr rest10_3 = 0;
+				GRBLinExpr rest9_1 = 0;
+				GRBLinExpr rest9_2 = 0;
+				GRBLinExpr rest9_3 = 0;
 
 				for (j = 0; j < N; j++)
 				{
 					if (i != j)
 					{
-						rest10_1 += vars_z[i][j];
-						rest10_2 += vars_z[j][i];
-						rest10_3 += getCost(i, j) * vars_x[i][j];
+						rest9_1 += vars_z[i][j];
+						rest9_2 += vars_z[j][i];
+						rest9_3 += getCost(i, j) * vars_x[i][j];
 					}
 				}
-				string s = "Rest10_i" + itos(i);
-				model.addConstr(rest10_1 - rest10_2 == rest10_3, s);
+				string s = "Rest9_i" + itos(i);
+				model.addConstr(rest9_1 - rest9_2 == rest9_3, s);
 			}
 
-			// constraint 11: z_di = f_di * x_di , sendo i qualquer target e d em D
+			// constraint 10: z_di = f_di * x_di , sendo i qualquer target e d em D
 			// no artigo está definido  de depot para target, isso exclui a limitação da aresta no caso de depot para depot
 			// por isso alteramos o índice i para empregar qualquer vértice
 			for (i = 0; i < N; ++i)
 			{
-				GRBLinExpr rest11_1 = 0;
-				GRBLinExpr rest11_2 = 0;
+				GRBLinExpr rest10_1 = 0;
+				GRBLinExpr rest10_2 = 0;
 
 				for (int d = 0; d < D; d++)
 				{
 					if (i != d)
 					{
-						rest11_1 = vars_z[d][i];
-						rest11_2 = getCost(d, i) * vars_x[d][i];
-						string s = "Rest11_d" + itos(d) + "_i_" + itos(i);
-						model.addConstr(rest11_1 == rest11_2, s);
+						rest10_1 = vars_z[d][i];
+						rest10_2 = getCost(d, i) * vars_x[d][i];
+						string s = "Rest10_d" + itos(d) + "_i_" + itos(i);
+						model.addConstr(rest10_1 == rest10_2, s);
 					}
 				}
 			}
-			// constraint 11: x_di <= y_d
-			/*for(i = D-1; i < N ;i++){
-					GRBLinExpr rest11_1 = 0;
-					GRBLinExpr rest11_2 = 0;
-					for(int d = 0; d < D-1; d++){
-						rest11_1 = vars_x[d][i];
-						rest11_2 = vars_d[d];
-						string s = "Rest11_d" + itos(d) + "_i_" + itos(i);
-						model.addConstr(rest11_1 <= rest11_2, s);
-					}
-				}*/
-
-			//------------------------------------------------------------------------------
-			// constraint 12  z_i_j <(F-t_j)x_ij para qualquer j em T, (i,j) em E
+			// constraint 11  z_i_j <(F-t_j)x_ij para qualquer j em T, (i,j) em E
 			for (i = 0; i < N; i++)
 			{
-				GRBLinExpr rest12_1 = 0;
-				GRBLinExpr rest12_2 = 0;
+				GRBLinExpr rest11_1 = 0;
+				GRBLinExpr rest11_2 = 0;
 				for (j = D; j < N; j++)
 				{
 					if (i != j)
 					{
-						rest12_1 = vars_z[i][j];
-						rest12_2 = (input.getRobotFuel(robotID) - get_min_fuel_2_depot(j)) * vars_x[i][j];
-						s = "Rest12_i_" + itos(i) + "_j_" + itos(j);
+						rest11_1 = vars_z[i][j];
+						rest11_2 = (input.getRobotFuel(robotID) - get_min_fuel_2_depot(j)) * vars_x[i][j];
+						s = "Rest11_i_" + itos(i) + "_j_" + itos(j);
+						model.addConstr(rest11_1 <= rest11_2, s);
+					}
+				}
+			}
+			// constraint 12  z_i_d <(F*x_ij) para qualquer i em V, d em D
+			for (i = 0; i < N; i++)
+			{
+				GRBLinExpr rest12_1 = 0;
+				GRBLinExpr rest12_2 = 0;
+				for (int d = 0; d < D; d++)
+				{
+					if (i != d)
+					{
+						rest12_1 = vars_z[i][d];
+						rest12_2 = input.getRobotFuel(robotID) * vars_x[i][d];
+						s = "Rest12_i_" + itos(i) + "_d_" + itos(d);
 						model.addConstr(rest12_1 <= rest12_2, s);
 					}
 				}
 			}
 
-			// constraint 13  z_i_d <(F*x_ij) para qualquer i em V, d em D
-			for (i = 0; i < N; i++)
+			// constraint 13  z_i_j >= (s_i + f_ij)*x_ij para qualquer i em T, (i,j) em E
+			for (i = D; i < N; i++)
 			{
 				GRBLinExpr rest13_1 = 0;
 				GRBLinExpr rest13_2 = 0;
-				for (int d = 0; d < D; d++)
-				{
-					if (i != d)
-					{
-						rest13_1 = vars_z[i][d];
-						rest13_2 = input.getRobotFuel(robotID) * vars_x[i][d];
-						s = "Rest13_i_" + itos(i) + "_d_" + itos(d);
-						model.addConstr(rest13_1 <= rest13_2, s);
-					}
-				}
-			}
-
-			// constraint 14  z_i_j >= (s_i + f_ij)*x_ij para qualquer i em T, (i,j) em E
-			for (i = D; i < N; i++)
-			{
-				GRBLinExpr rest14_1 = 0;
-				GRBLinExpr rest14_2 = 0;
-
 				for (j = 0; j < N; j++)
 				{
 					if (i != j)
 					{
-						rest14_1 = vars_z[i][j];
-						rest14_2 = (get_min_fuel_2_depot(i) + getCost(i, j)) * vars_x[i][j];
+						rest13_1 = vars_z[i][j];
+						rest13_2 = (get_min_fuel_2_depot(i) + getCost(i, j)) * vars_x[i][j];
 						s = "Rest14_i_" + itos(i) + "_j_" + itos(j);
-						model.addConstr(rest14_1 >= rest14_2, s);
+						model.addConstr(rest13_1 >= rest13_2, s);
 					}
 				}
 			}
 
 			//******************* Coverage Constraints **************************/
-			// constraint 15: sum X_i_i+1_k + sum X_i+1_i_k = 1, i=D,D+2,...N-1
+			// constraint 14: sum X_i_i+1_k + sum X_i+1_i_k = 1, i=D,D+2,...N-1
 			for (i = D; i < N - 1; i = i + 2)
 			{
-				GRBLinExpr rest15 = 0;
-				rest15 += vars_x[i][i + 1] + vars_x[i + 1][i];
-				string s = "Rest15_i_" + itos(i);
-				model.addConstr(rest15 == 1, s);
+				GRBLinExpr rest14 = 0;
+				rest14 += vars_x[i][i + 1] + vars_x[i + 1][i];
+				string s = "Rest14_i_" + itos(i);
+				model.addConstr(rest14 == 1, s);
 			}
-			// constraint 16: sum X_i_i+1_k = Sum Sum X_i_j_k, i = 2,4,N
+			// constraint 15: sum X_i_i+1_k = Sum Sum X_i_j_k, i = 2,4,N
 			for (i = D; i < N; i = i + 2)
+			{
+				GRBLinExpr rest15_1 = 0;
+				GRBLinExpr rest15_2 = 0;
+				rest15_1 += vars_x[i][i + 1];
+				for (j = D + 1; j < N; j = j + 2)
+					if (i != j)
+						rest15_2 += vars_x[i][j];
+
+				string s = "Rest15_i_" + itos(i);
+				model.addConstr(rest15_1 == rest15_2, s);
+			}
+
+			// constraint 16: sum X_i_i-1_k = Sum Sum X_i_j_k, i =
+			for (i = D + 1; i < N; i = i + 2)
 			{
 				GRBLinExpr rest16_1 = 0;
 				GRBLinExpr rest16_2 = 0;
-				rest16_1 += vars_x[i][i + 1];
-				for (j = D + 1; j < N; j = j + 2)
+				rest16_1 += vars_x[i][i - 1];
+				for (j = D; j < N; j = j + 2)
 					if (i != j)
 						rest16_2 += vars_x[i][j];
 
 				string s = "Rest16_i_" + itos(i);
 				model.addConstr(rest16_1 == rest16_2, s);
 			}
-
-			// constraint 17: sum X_i_i-1_k = Sum Sum X_i_j_k, i =
-			for (i = D + 1; i < N; i = i + 2)
-			{
-				GRBLinExpr rest17_1 = 0;
-				GRBLinExpr rest17_2 = 0;
-				rest17_1 += vars_x[i][i - 1];
-				for (j = D; j < N; j = j + 2)
-					if (i != j)
-						rest17_2 += vars_x[i][j];
-
-				string s = "Rest17_i_" + itos(i);
-				model.addConstr(rest17_1 == rest17_2, s);
-			}
 			/********************Depot Constraint ***********************************************/
-			// Contraint 18: Dmin ==SumD[j]
-			GRBLinExpr rest18 = 0;
+			// Contraint 17: Dmin ==SumD[j]
+			GRBLinExpr rest17 = 0;
 			for (j = 0; j < D - 1; j++)
 			{ // vertice
-				rest18 += vars_d[j];
+				rest17 += vars_d[j];
 			}
-			// model.addConstr(rest26 <= var_d, s);
-			model.addConstr(rest18 <= Elem[1], "Rest18");
+			// model.addConstr(rest17 <= var_d, s);
+			model.addConstr(rest17 <= Elem[1], "Rest17");
 
 			/******************************************************************************************/
 			// initial solution
-
 			vector<vector<GRBVar>> vars_x_temp(N, vector<GRBVar>(N));
 			for (i = 0; i < N; i++)
 				for (j = 0; j < N; j++)
@@ -1020,6 +1001,9 @@ namespace std
 				delete[] vars_x[i];
 			delete[] vars_x;
 			delete[] vars_d;
+			for (int i = 0; i < N; i++)
+				delete[] vars_z[i];
+			delete[] vars_z;
 		}
 		catch (GRBException &e)
 		{

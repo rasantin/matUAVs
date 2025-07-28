@@ -1,2 +1,6 @@
-output/
+# Ignorar arquivos de depuração
+*.pdb
+
+# Ignorar pastas geradas automaticamente
 /bin/
+/output/

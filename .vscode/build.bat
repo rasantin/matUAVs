@@ -1,5 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
+cd /d "%~dp0\.."
+
 
 REM Gera o timestamp com PowerShell
 for /f "delims=" %%i in ('powershell -Command "(Get-Date).ToString('MMddyy_HHmmss')"') do set timestamp=%%i
@@ -17,7 +19,6 @@ del /q bin\*.exp >nul 2>&1
 
 REM Cria diretórios se não existirem
 if not exist bin mkdir bin
-if not exist logs mkdir logs
 
 REM Inicializa o ambiente do compilador MSVC
 call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"

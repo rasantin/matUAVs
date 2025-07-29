@@ -530,7 +530,6 @@ namespace std
 			{
 				for (j = 0; j < N; j++)
 				{
-					//if (i != j)
 					vars_x[i][j] = model.addVar(0, 1, 0, GRB_BINARY, "x_i_" + itos(i) + "_j_" + itos(j));
 				}
 			}
@@ -569,8 +568,14 @@ namespace std
 			model.addConstr(rest1 <= Elem[0], s);
 
 			/**************** Degree Constraints ***********************/
-			// Constraint 2: SUM x_di = SUM x_id para qualquer d em D diferente da base
-			//  From any target(i) there is only one robot(k) going to the vertice(j)
+			// Constraint 2: For each depot d in D excluding the base, ensure balanced flow
+			// Constraint 2_1: Sum of x_di for each depot d in D excluding the base
+			// Constraint 2_2: Sum of x_id for each depot d in D excluding the base
+			// The loop below iterates over all depots except the base (hence D-1).
+			// For each depot d, it calculates the in-degree (rest2_1) and out-degree (rest2_2),
+			// then adds a constraint ensuring the number of incoming edges equals the number of outgoing edges.
+			// This guarantees that each depot (except the base) has balanced flow,
+			// preventing inconsistencies in the graph flow and facilitating the formation of valid circuits.
 			for (int d = 0; d < D - 1; d++)
 			{ // apenas depots sem a base
 				GRBLinExpr rest2_1 = 0;
@@ -587,20 +592,26 @@ namespace std
 				model.addConstr(rest2_1 == rest2_2, s);
 			}
 
-			// Constraint 3a: SUM x_id >= y_d para qualquer d em D diferente da base
-			// Constraint 3b: SUM x_di >= y_d * N para qualquer d em D diferente da base
-			//  N = (0.5*(D*(D-1))+T) quantidade de ligações entre depots + target e depots
+			// Constraints 3a and 3b: Using the same sum of incoming arcs to depot d,
+			// we impose two bounds:
+			// 3a) sum(vars_x[i][d]) >= vars_d[d], ensuring at least one incoming arc if depot is active
+			// 3b) sum(vars_x[i][d]) <= bigM * vars_d[d], bounding the maximum arcs if depot is active, zero otherwise
+			// bigM = (0.5 * (D * (D - 1)) + D * T) represents a sufficiently large upper bound
+			// corresponding to the maximum possible number of incoming arcs to a depot,
+			// including arcs from other depots and targets.
+			// It is used to activate or deactivate constraints conditionally depending on vars_d[d].
 			for (int d = 0; d < D - 1; d++)
-			{ // apenas depots sem a base
+			{ 
 				GRBLinExpr rest3_b = 0;
-				for (i = 0; i < N; i++) // para target
-					rest3_b += vars_x[i][d];
-
+				for (i = 0; i < N; i++) // depot and targets
+				{
+					if (i != d)
+						rest3_b += vars_x[i][d];
+				}
 				string s = "Rest3_a_d_" + itos(d);
 				model.addConstr(rest3_b >= vars_d[d], s);
 				s = "Rest3_b_d_" + itos(d);
 				model.addConstr(rest3_b <= (0.5 * (D * (D - 1)) + D * T) * vars_d[d], s);
-				// model.addConstr(rest3_b <= N*vars_d[d], s);
 			}
 
 			// Constraint 4: SUM x_di <= y_d para qualquer d em D diferente da base

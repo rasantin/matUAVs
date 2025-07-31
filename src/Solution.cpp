@@ -488,6 +488,8 @@ namespace std
 			GRBModel model = GRBModel(env);
 			model.set(GRB_IntParam_OutputFlag, 0);
 			model.set(GRB_IntParam_LazyConstraints, 1);
+			model.set(GRB_IntParam_Threads, 0); // usa todos os núcleos da CPU
+
 
 			// model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
 			GRBVar *Elem = new GRBVar[2];
@@ -552,6 +554,9 @@ namespace std
 
 			/******************** Constraints *****************/
 			// Constraint 1: SUM_{i,j} (1 + q_k) * c_ij * x_ij <= Pmax, for all nodes i, j (robotID is fixed)
+			//Ensures that the total weighted cost of the path used by robot k (robotID)
+			// does not exceed the upper limit Pmax. The weight factor (1 + q_k) accounts for a penalty 
+			// related to the robot's properties.
 			GRBLinExpr rest1 = 0;
 			for (i = 0; i < N; i++)
 			{
@@ -601,7 +606,7 @@ namespace std
 			// including arcs from other depots and targets.
 			// It is used to activate or deactivate constraints conditionally depending on vars_d[d].
 			for (int d = 0; d < D - 1; d++)
-			{ 
+			{
 				GRBLinExpr rest3_b = 0;
 				for (i = 0; i < N; i++) // depot and targets
 				{
@@ -615,6 +620,9 @@ namespace std
 			}
 
 			// Constraint 4: SUM x_di <= y_d para qualquer d em D diferente da base
+			//Ensures that a depot d (excluding the base) can only be used
+			// (have an outgoing edge) if it is activated, i.e., y_d = 1.
+			// Also enforces binary domain on y_d.
 			for (int d = 0; d < D - 1; d++)
 			{ // apenas depots sem a base
 				string s = "Rest4_a_" + itos(d);
@@ -624,15 +632,20 @@ namespace std
 				model.addConstr(vars_d[d] <= 1, s);
 			}
 
-			// Constraint 5: [SUM x_id0 == m)
+			// Constraint 5: [SUM x_id0 == 1]
+			// This constraint ensures that exactly one edge enters the base node (baseId).
 			GRBLinExpr rest5 = 0;
 			for (i = 0; i < N; i++)
+			{
 				if (i != baseId)
 					rest5 += vars_x[i][baseId];
+			}
 			s = "Rest5";
 			model.addConstr(rest5 == 1, s);
 
-			// Constraint 6: [SUM x_d0i == 1]
+			// Constraint 6: Ensure exactly one outgoing edge from the base node (baseId).
+			// This constraint guarantees that the route starts from the base and only one path departs from it,
+			// enforcing a single departure for the robot from its base.
 			GRBLinExpr rest6 = 0;
 			for (i = 0; i < N; i++)
 				if (i != baseId)
@@ -640,7 +653,9 @@ namespace std
 			s = "Rest6";
 			model.addConstr(rest6 == 1, s);
 
-			// Constraint 7: SUM x_ij = 1 i em V e j em T
+			// Constraint 7: For each target node j, the sum over all i of x_ij (incoming arcs to j) equals 1
+			// Targets are indexed from D to N-1 because nodes 0 to D-1 are depots, and D to N-1 are targets.
+			// Targets are indexed from D to N-1
 			for (int j = D; j < N; j++)
 			{ // cada target
 				GRBLinExpr rest7 = 0;
@@ -650,8 +665,8 @@ namespace std
 				string s = "Rest7_j_" + itos(j);
 				model.addConstr(rest7 == 1, s);
 			}
-
-			// Constraint 8: SUM x_ji = 1 i em V e j em T
+			// Constraint 8: For each target node j, ensure exactly one outgoing arc (sum over i of x_j_i = 1)
+			// Each target node must have exactly one incoming and one outgoing arc, guaranteeing unique visitation and departure.
 			for (int j = D; j < N; j++)
 			{ // cada target
 				GRBLinExpr rest8 = 0;
@@ -665,6 +680,8 @@ namespace std
 
 			//-----------------------Fuel restriction---------------------------------------------
 			// Constraint 9: SUM z_ij - SUM z_ji = SUM f_ij * x_ij, sendo i  qualquer target
+			// Rest9: For each target node i (i = D; i < N), ensure fuel flow conservation.
+			// This constraint is only applied to targets because depots do not require fuel flow conservation in this context.
 			for (i = D; i < N; i++)
 			{
 				GRBLinExpr rest9_1 = 0;
@@ -677,16 +694,23 @@ namespace std
 					{
 						rest9_1 += vars_z[i][j];
 						rest9_2 += vars_z[j][i];
-						rest9_3 += getCost(i, j) * vars_x[i][j];
+						double cost_ij = getCost(i, j);
+						if (cost_ij <= 0)
+							cost_ij = 1e-6; // Set a small positive value if cost is zero or negative
+						rest9_3 += cost_ij * vars_x[i][j];
 					}
 				}
-				string s = "Rest9_i" + itos(i);
+				string s = "Rest9_i_" + itos(i);
+				// rest9_1 = total fuel leaving node i (outflow)
+				// rest9_2 = total fuel entering node i (inflow)
+				// rest9_3 = total fuel consumed on outgoing arcs from node i
 				model.addConstr(rest9_1 - rest9_2 == rest9_3, s);
 			}
 
-			// constraint 10: z_di = f_di * x_di , sendo i qualquer target e d em D
-			// no artigo está definido  de depot para target, isso exclui a limitação da aresta no caso de depot para depot
-			// por isso alteramos o índice i para empregar qualquer vértice
+			// Constraint 10: z_di = f_di * x_di, where i can be any vertex (not only targets)
+			// In the original paper, this constraint is defined only for edges from a depot to a target,
+			// which excludes edges between depots.
+			// Therefore, index i was generalized to allow any vertex as the destination.
 			for (i = 0; i < N; ++i)
 			{
 				GRBLinExpr rest10_1 = 0;
@@ -698,12 +722,15 @@ namespace std
 					{
 						rest10_1 = vars_z[d][i];
 						rest10_2 = getCost(d, i) * vars_x[d][i];
-						string s = "Rest10_d" + itos(d) + "_i_" + itos(i);
+						string s = "Rest10_d_" + itos(d) + "_i_" + itos(i);
 						model.addConstr(rest10_1 == rest10_2, s);
 					}
 				}
 			}
-			// constraint 11  z_i_j <(F-t_j)x_ij para qualquer j em T, (i,j) em E
+			// Constraint 11  z_i_j <(F-t_j)x_ij para qualquer j em T, (i,j) em E
+			// Ensures that the fuel consumption z_ij on edge (i,j)
+			// does not exceed the remaining fuel after reaching node j,
+			// assuming j is a target. Applies only to j in T (the set of targets), i.e., j >= D.
 			for (i = 0; i < N; i++)
 			{
 				GRBLinExpr rest11_1 = 0;
@@ -720,6 +747,9 @@ namespace std
 				}
 			}
 			// constraint 12  z_i_d <(F*x_ij) para qualquer i em V, d em D
+			// Ensures that the fuel consumption z_id on edge (i,d)
+			// does not exceed the total available fuel (F) if that edge is used.
+			// Applies to any i in V and d in D.
 			for (i = 0; i < N; i++)
 			{
 				GRBLinExpr rest12_1 = 0;
@@ -737,6 +767,10 @@ namespace std
 			}
 
 			// constraint 13  z_i_j >= (s_i + f_ij)*x_ij para qualquer i em T, (i,j) em E
+			// Ensures that when departing from a target node i toward j,
+			// the robot has consumed at least the fuel required to reach i from a depot,
+			// plus the cost to go from i to j, if edge (i,j) is used.
+			// Applies to i in T and (i,j) in E.
 			for (i = D; i < N; i++)
 			{
 				GRBLinExpr rest13_1 = 0;
@@ -747,7 +781,7 @@ namespace std
 					{
 						rest13_1 = vars_z[i][j];
 						rest13_2 = (get_min_fuel_2_depot(i) + getCost(i, j)) * vars_x[i][j];
-						s = "Rest14_i_" + itos(i) + "_j_" + itos(j);
+						s = "Rest13_i_" + itos(i) + "_j_" + itos(j);
 						model.addConstr(rest13_1 >= rest13_2, s);
 					}
 				}
@@ -1060,6 +1094,9 @@ namespace std
 
 			// Must set LazyConstraints parameter when using lazy constraints
 			model.set(GRB_IntParam_LazyConstraints, 1);
+
+			model.set(GRB_IntParam_Threads, 0); // usa todos os núcleos da CPU
+
 
 			// model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
 			GRBVar *Elem = 0;

@@ -787,7 +787,10 @@ namespace std
 			}
 
 			//******************* Coverage Constraints **************************/
-			// constraint 14: sum X_i_i+1_k + sum X_i+1_i_k = 1, i=D,D+2,...N-1
+			// Constraint 14: sum X_i_i+1_k + sum X_i+1_i_k = 1, i=D,D+2,...N-1
+			// Enforces that each target pair (i, i+1) is visited exactly once.
+			// For i in {D, D+2, ..., N-2}, ensures that either edge (i → i+1) or (i+1 → i) is used.
+			// This models full coverage of target lines (each represented by a pair of nodes).
 			for (i = D; i < N - 1; i = i + 2)
 			{
 				GRBLinExpr rest14 = 0;
@@ -795,7 +798,9 @@ namespace std
 				string s = "Rest14_i_" + itos(i);
 				model.addConstr(rest14 == 1, s);
 			}
-			// constraint 15: sum X_i_i+1_k = Sum Sum X_i_j_k, i = 2,4,N
+			// Constraint 15: sum X_i_i+1_k = Sum Sum X_i_j_k, i = 2,4,N
+			// Balances outgoing arcs from the first node of each target pair.
+			// Ensures that if a line is covered (via i → i+1), it must connect to another route node.
 			for (i = D; i < N; i = i + 2)
 			{
 				GRBLinExpr rest15_1 = 0;
@@ -809,7 +814,9 @@ namespace std
 				model.addConstr(rest15_1 == rest15_2, s);
 			}
 
-			// constraint 16: sum X_i_i-1_k = Sum Sum X_i_j_k, i =
+			// constraint 16: sum X_i_i-1_k = Sum Sum X_i_j_k, i = D+1,D+3,...N
+			// Balances outgoing arcs from the second node of each target pair.
+			// Similar to Rest15 but for even j, excluding self-loop.
 			for (i = D + 1; i < N; i = i + 2)
 			{
 				GRBLinExpr rest16_1 = 0;
@@ -824,6 +831,9 @@ namespace std
 			}
 			/********************Depot Constraint ***********************************************/
 			// Contraint 17: Dmin ==SumD[j]
+			// The number of activated depots (excluding base) must be less than or equal to Dmin.
+			// This helps limit the number of depots used in the solution.
+			// Dmin is passed through Elem[1].
 			GRBLinExpr rest17 = 0;
 			for (j = 0; j < D - 1; j++)
 			{ // vertice

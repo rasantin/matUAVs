@@ -490,7 +490,6 @@ namespace std
 			model.set(GRB_IntParam_LazyConstraints, 1);
 			model.set(GRB_IntParam_Threads, 0); // usa todos os núcleos da CPU
 
-
 			// model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
 			GRBVar *Elem = new GRBVar[2];
 
@@ -554,8 +553,8 @@ namespace std
 
 			/******************** Constraints *****************/
 			// Constraint 1: SUM_{i,j} (1 + q_k) * c_ij * x_ij <= Pmax, for all nodes i, j (robotID is fixed)
-			//Ensures that the total weighted cost of the path used by robot k (robotID)
-			// does not exceed the upper limit Pmax. The weight factor (1 + q_k) accounts for a penalty 
+			// Ensures that the total weighted cost of the path used by robot k (robotID)
+			// does not exceed the upper limit Pmax. The weight factor (1 + q_k) accounts for a penalty
 			// related to the robot's properties.
 			GRBLinExpr rest1 = 0;
 			for (i = 0; i < N; i++)
@@ -619,17 +618,17 @@ namespace std
 				model.addConstr(rest3_b <= (0.5 * (D * (D - 1)) + D * T) * vars_d[d], s);
 			}
 
-			// Constraint 4: SUM x_di <= y_d para qualquer d em D diferente da base
-			//Ensures that a depot d (excluding the base) can only be used
-			// (have an outgoing edge) if it is activated, i.e., y_d = 1.
-			// Also enforces binary domain on y_d.
-			for (int d = 0; d < D - 1; d++)
-			{ // apenas depots sem a base
-				string s = "Rest4_a_" + itos(d);
-				model.addConstr(0 <= vars_d[d], s);
-
-				s = "Rest4_b_" + itos(d);
-				model.addConstr(vars_d[d] <= 1, s);
+			// Constraint 4: A depot can only have outgoing arcs if it is activated
+			// Ensures that if any edge departs from depot d, it must be marked as used (y_d = 1)
+			for (int d = 0; d < D - 1; d++)//excludes the base depot
+			{
+				GRBLinExpr sum_out = 0;
+				for (int j = 0; j < N; j++)
+				{
+					if (j != d)
+						sum_out += vars_x[d][j];
+				}
+				model.addConstr(sum_out <= N - 1 * vars_d[d], "Rest4_link_" + itos(d));
 			}
 
 			// Constraint 5: [SUM x_id0 == 1]
@@ -1096,7 +1095,6 @@ namespace std
 			model.set(GRB_IntParam_LazyConstraints, 1);
 
 			model.set(GRB_IntParam_Threads, 0); // usa todos os núcleos da CPU
-
 
 			// model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
 			GRBVar *Elem = 0;

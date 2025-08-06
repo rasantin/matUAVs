@@ -463,58 +463,48 @@ namespace std
 
 	Solution::path Solution::MILP_Warm_Start(Set nodes_set, path initial_sol)
 	{
-		int i, j, T, D;
-		int baseId = 0;
-		std::chrono::time_point<std::chrono::system_clock> start, end;
+		int i, j;
 
-		path sol;
-		sol.pID = -1;
-		// colocar as informações do node_set no formato da entrada da programação inteira, chamada de coverage_set
+		// Convert node set to the input format required by the MILP model
 		Convert_NS_to_CS(nodes_set);
 
-		T = getTargetNum(); // set of targets
-		D = getDepotNum();	// fueling depots
-
-		const int N = T + D; // total nodes
-
+		int T = getTargetNum(); // number of targets
+		int D = getDepotNum();	// number of depots
+		const int N = T + D;	// total number of nodes
 		int robotID = nodes_set.robotID;
+		int baseId = getBaseID();
 
-		// base position on coverageSet;
-		baseId = getBaseID();
+		std::chrono::time_point<std::chrono::system_clock> start, end;
 
+		// Initialize solution structure
+		path sol;
+		sol.pID = -1;
+
+		// Begin model construction
 		try
 		{
-			// GRBEnv env = GRBEnv();
 			GRBModel model = GRBModel(env);
-			model.set(GRB_IntParam_OutputFlag, 0);
-			model.set(GRB_IntParam_LazyConstraints, 1);
-			model.set(GRB_IntParam_Threads, 0); // usa todos os núcleos da CPU
 
-			// model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
+			// Gurobi performance parameters
+			model.set(GRB_IntParam_OutputFlag, 0);		// suppress solver output
+			model.set(GRB_IntParam_LazyConstraints, 1); // enable lazy constraints
+			model.set(GRB_IntParam_Threads, 0);			// use all available CPU cores
+
+			// Multi-objective optimization setup
+			GRBVar var_Pmax = model.addVar(0.0, GRB_INFINITY, 0.0, GRB_CONTINUOUS, "vars_Pmax");
+			GRBVar var_Dmin = model.addVar(0.0, D - 1, 0.0, GRB_INTEGER, "vars_Dmin");
+
 			GRBVar *Elem = new GRBVar[2];
+			Elem[0] = var_Pmax; // Elem[0] = objective variable Pmax
+			Elem[1] = var_Dmin; // Elem[1] = objective variable Dmin
 
-			Elem[0] = model.addVar(0, GRB_INFINITY, 0.0, GRB_CONTINUOUS, "Pmax");
-			Elem[1] = model.addVar(0, D - 1, 0.0, GRB_INTEGER, "Dmax");
+			GRBLinExpr obj0 = Elem[0];
+			model.setObjectiveN(obj0, 0, 0, 0.9999); // Main objective
 
-			Elem[0].set(GRB_StringAttr_VarName, "vars_Pmax");
-			Elem[0].set(GRB_CharAttr_VType, GRB_CONTINUOUS);
+			GRBLinExpr obj1 = Elem[1];
+			model.setObjectiveN(obj1, 1, 0, 0.0001); // Secondary objective
 
-			Elem[1].set(GRB_StringAttr_VarName, "vars_Dmin");
-			Elem[1].set(GRB_CharAttr_VType, GRB_INTEGER);
-
-			GRBLinExpr objn = 0;
-
-			// setar e configurar o objetivo 0
-			objn = Elem[0];
-			model.setObjectiveN(objn, 0, 0, 0.9999);
-
-			// setar e configurar o objetivo 1
-			objn = Elem[1];
-			model.setObjectiveN(objn, 1, 0, 0.0001);
-
-			/***************** Objective Function *****************/
 			model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
-
 			model.update();
 
 			GRBVar **vars_x = NULL;
@@ -620,7 +610,7 @@ namespace std
 
 			// Constraint 4: A depot can only have outgoing arcs if it is activated
 			// Ensures that if any edge departs from depot d, it must be marked as used (y_d = 1)
-			for (int d = 0; d < D - 1; d++)//excludes the base depot
+			for (int d = 0; d < D - 1; d++) // excludes the base depot
 			{
 				GRBLinExpr sum_out = 0;
 				for (int j = 0; j < N; j++)
@@ -843,7 +833,11 @@ namespace std
 			model.addConstr(rest17 <= Elem[1], "Rest17");
 
 			/******************************************************************************************/
-			// initial solution
+			//-----------------------------------------------------
+			// Build initial solution hints for the MILP warm start
+			//-----------------------------------------------------
+
+			// Temporary variables for x_ij edges to define warm start structure (not added to model)
 			vector<vector<GRBVar>> vars_x_temp(N, vector<GRBVar>(N));
 			for (i = 0; i < N; i++)
 				for (j = 0; j < N; j++)
@@ -851,43 +845,48 @@ namespace std
 					if (i != j)
 						vars_x_temp[i][j] = model.addVar(0.0, 1.0, 0.0, GRB_BINARY, "x_temp_" + itos(i) + "_" + itos(j));
 				}
-			double fuel;
-			vector<vector<double>> start_vals(N, vector<double>(N, 0.0)); // todos 0 inicialmente
 
+			// Fuel placeholder
+			double fuel;
+
+			// Create a matrix of initial values (0.0 by default)
+			vector<vector<double>> start_vals(N, vector<double>(N, 0.0));
+
+			// Loop through each edge in the initial solution
 			for (auto edge : initial_sol.edges)
 			{
-				// Verifica se os nós do edge existem no mapa de IDs
+				// Find the integer node IDs from CVSet IDs
 				auto it_a = map_cvset_id_to_node_id.find(edge.node_a);
 				auto it_b = map_cvset_id_to_node_id.find(edge.node_b);
 
-				// Se algum dos nós não estiver no mapa, ignora esse edge
+				// Skip if the edge contains unknown nodes
 				if (it_a == map_cvset_id_to_node_id.end() || it_b == map_cvset_id_to_node_id.end())
 					continue;
 
 				i = it_a->second;
 				j = it_b->second;
 
-				// Evita a criação de variáveis com loop (i == j), que não foram adicionadas ao modelo
+				// Skip self-loops (which are not valid in the MILP model)
 				if (i == j)
 					continue;
 
-				// Marca a variável de decisão (i,j) como parte da solução inicial
+				// Mark this edge as used in the warm start
 				start_vals[i][j] = 1.0;
 
-				// Se o nó de chegada for um target (j >= D), define a dica de valor para variável z
+				// If the target node is a coverage target (not a depot), define fuel hints
 				if (j >= D)
 				{
-					// Verifica se existe informação de combustível associada ao target
 					auto fuelIt = initial_sol.fuelOnTarget.find(edge.node_b);
 					if (fuelIt != initial_sol.fuelOnTarget.end())
 					{
-						// Calcula o combustível restante no target e define como dica (hint) para z_ij
+						// Estimate remaining fuel and set as hint for z[i][j]
 						fuel = input.getRobotFuel(robotID) - fuelIt->second;
 						vars_z[i][j].set(GRB_DoubleAttr_VarHintVal, fuel);
 					}
 				}
 			}
 
+			// Set warm start values for x_ij decision variables in model
 			for (i = 0; i < N; i++)
 				for (j = 0; j < N; j++)
 				{
@@ -895,9 +894,11 @@ namespace std
 						vars_x[i][j].set(GRB_DoubleAttr_Start, start_vals[i][j]);
 				}
 
+			// Assume initially that no depot is used
 			for (i = 0; i < D - 1; i++)
 				vars_d[i].set(GRB_DoubleAttr_VarHintVal, 0.0);
 
+			// Set depot hints for known depots from initial solution
 			for (auto depot : initial_sol.depots)
 			{
 				i = map_cvset_id_to_node_id.find(depot)->second;
@@ -905,32 +906,33 @@ namespace std
 			}
 
 			/******************************************************************************************/
-			// model.set(GRB_IntParam_StartNodeLimit,0);
-			// model.set(GRB_IntParam_Method, GRB_METHOD_BARRIER);
-			// model.set(GRB_IntParam_StartNodeLimit,2000000000);
-
-			// model.set(GRB_DoubleParam_Heuristics,0);
-
+			// Update the model with all added variables and constraints before optimization
 			model.update();
 
+			// Disable Gurobi console logging
 			model.set(GRB_IntParam_LogToConsole, 0);
+
+			// Set acceptable MIP optimality gap to 1%
 			model.set(GRB_DoubleParam_MIPGap, 0.01);
 
-			// desabilitado para o cut off no callback;
-			// model.set(GRB_IntParam_PreCrush,1);
-
+			// Create callback object for subtour elimination with warm start flag = 1
 			subtourelim cb = subtourelim(vars_x, N, vars_d, D - 1, 1);
 			model.setCallback(&cb);
 
+			// Start measuring optimization time
 			start = std::chrono::system_clock::now();
+			// Run the optimization
 			model.optimize();
+			// End time measurement
 			end = std::chrono::system_clock::now();
 
-			// obter o tempo necessário para otimizar a rota;
+			// Calculate and store the elapsed time in milliseconds for the optimization process
 			gurobi_optimize_time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
+			// Final update to the model after optimization (usually not strictly necessary)
 			model.update();
 
+			// Retrieve optimization status (e.g., optimal, infeasible, etc.)
 			int optimstatus = model.get(GRB_IntAttr_Status);
 
 			if (optimstatus == GRB_OPTIMAL)
@@ -944,94 +946,100 @@ namespace std
 				double time = 0;
 				double total_path_cost = 0.0;
 
-				vector<pair<int, pair<pair<int, int>, pair<double, double>>>> output;
+				// Store output edges with associated commodity
 				vector<pair<int, edge>> grb_out;
 				edge e;
 
-				int commodity = 0;
-
 				double v_x = 0;
 
-				// set the path to the solution
+				// Reconstruct the solution path from GRB variables
 				for (i = 0; i < N; i++)
 				{
 					for (j = 0; j < N; j++)
 					{
+						// Avoid self-loop
 						if (i == j)
 							continue;
 
+						// Get value of x[i][j] from solution
 						v_x = vars_x[i][j].get(GRB_DoubleAttr_X);
 
+						// Edge was selected (binary threshold)
 						if (v_x >= 0.99)
 						{
+							// Continuous value used to store fuel
 							double v_z = vars_z[i][j].get(GRB_DoubleAttr_X);
+							// Map Gurobi index to input node index
 							int index_i = getIndex(i);
 							int index_j = getIndex(j);
-							int commodity = static_cast<int>(v_z);
 
-							// não inserimos a base que é referenciada pelo índice D
-							if (j >= D)
+							// Interpreting v_z as a commodity ID
+							int commodity = static_cast<int>(round(v_z));
+
+							// Target node: insert remaining fuel information
+							if (j >= D) // D is the number of depots; j >= D means it is a target
+
 							{
 								sol.fuelOnTarget.emplace(getIndex(j), input.getRobotFuel(robotID) - v_z);
 								sol.targetsNum++;
 							}
 
-							if (i < D - 1)
+							// Source depot: store it in the solution
+							if (i < D - 1) // node is a depot (excluding base node which is often at D-1)
 							{
 								int id = getIndex(i);
 
 								if (mapNodesTypes[id] != 0)
 									cerr << "problem warm !\n";
+
 								sol.depots.insert(getIndex(i));
 							}
 
-							time = getCost(i, j);
-							fcost = time + (input.getRobotProp(robotID) * time);
+							// Compute cost and time from input
+							time = getCost(i, j);								 // Base travel time
+							fcost = time + (input.getRobotProp(robotID) * time); // Add proportional fuel cost
 
+							// Build edge
 							e.cost = fcost;
 							e.time = time;
 							e.node_a = index_i;
 							e.node_b = index_j;
 							total_path_cost += e.cost;
 
-							if (e.node_a == e.node_b)
-							{
-								cout << "Loop detected!\n";
-							}
-
-							// Arredonda a quantidade de vezes que a aresta é percorrida
+							// Round number of times edge is used (e.g., in multi-commodity flow)
 							int n_arcs = static_cast<int>(round(v_x));
 
-							// insere a quantidade de vezes que a aresta é percorrida
+							// Append the edge multiple times if needed
 							for (int x = 0; x < n_arcs; ++x)
 								grb_out.emplace_back(make_pair(commodity, e));
 						}
 					}
 				}
 
-				// Atribui o custo total da solução, calculado como a soma dos custos de cada aresta do caminho.
+				// Assign the total cost of the solution, calculated as the sum of edge costs in the path
 				sol.pCost = total_path_cost;
 
-				// ordernar pelo valor da commodity do maior para o menor
+				// Sort the list of edges by commodity value in descending order
+				// This ensures that higher-commodity paths are inserted first
 				sort(grb_out.begin(), grb_out.end(),
 					 [](pair<int, edge> el_1, pair<int, edge> el_2)
 					 {
 						 return el_1.first > el_2.first;
 					 });
 
-				// inserir o caminho na solução
+				// Insert the ordered edges into the solution path
 				for (const auto &itvec : grb_out)
 					sol.edges.emplace_back(itvec.second);
 
-				// caso o caminho tenha aresta fora de ordem, não configurando um circuito, ordenar
-				// isso pode ocorrer em depots, visto a possíbilidade de loops, ordenar os diversos loops que passam pelos depots.
-				// if(!IsCircuit(sol))
+				// Check if the sequence of edges forms a valid circuit
+				// Due to the presence of loops (especially at depots), edges might be out of order
+				// SortMultiplesAdjacentOnDepots tries to fix any sequence issues around depot nodes
 				SortMultiplesAdjacentOnDepots(&sol);
 
 				//----------------------------------------- teste temporário para verificar se a capacidade do robô é mantida
 				if (!PathRestrictions(sol))
 				{
-					cout << "solução não validada: warm_start" << endl;
+					cout << "Invalid solution found: warm_start" << endl;
 					sol.pCost = -1;
 					sol.robotID = -1;
 					sol.pID = -1;
@@ -1039,18 +1047,20 @@ namespace std
 				}
 				//--------------------------------------------------
 
-				// contabilizar o base do robô
+				// Count depots (excluding base node) used in the solution
+				// `+1` accounts for the robot's base
 				sol.depotsNum = sol.depots.size() + 1;
 			}
 			else
-			{ // se for inviável
+			{
+				// If the model is infeasible or not solved optimally
 				sol.pCost = -1;
 				sol.robotID = -1;
 				sol.pID = -1;
-				//	model.computeIIS();
-				//	model.write("model.ilp");
-				//	model.write("model.lp");
 			}
+
+			// Manual memory deallocation for dynamically allocated GRBVar arrays
+			// vars_x, vars_d, vars_z are 2D/1D arrays of GRBVar used in the model
 			for (int i = 0; i < N; i++)
 				delete[] vars_x[i];
 			delete[] vars_x;
@@ -1069,6 +1079,7 @@ namespace std
 			cout << "Error during optimization" << endl;
 		}
 
+		// Return either the valid solution or a placeholder with pCost = -1 for infeasibility
 		return sol;
 	}
 

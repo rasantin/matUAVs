@@ -83,6 +83,7 @@ namespace std
 		path bestPath(int gID);
 		path MILP(Set coverage_set);
 		path MILP_Warm_Start(Set coverage_set, path initial_sol);
+		path milpSolver(Set coverage_set, path initial_sol = path());
 		path improvePath(path p);
 
 		path removeCL(path p, int cl);

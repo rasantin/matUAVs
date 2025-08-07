@@ -330,7 +330,8 @@ namespace std
 		{
 			set_temp = nodesSets[gID];
 
-			sol = MILP(set_temp);
+			//sol = MILP(set_temp);
+			sol = milpSolver(set_temp, {});
 
 			// muitas chamadas do gurobi, manteremos apenas a informação da última
 			// vec_call.clear();
@@ -360,7 +361,8 @@ namespace std
 				set_temp.depots = it_sub_set->depots;
 
 				// calcular a solução
-				sol = MILP(set_temp);
+				//sol = MILP(set_temp);
+				sol = milpSolver(set_temp, {});
 
 				// muitas chamadas do gurobi, materemos apenas a informação da última
 				// vec_call.clear();
@@ -398,7 +400,8 @@ namespace std
 			set_temp = nodesSets[gID];
 
 			// pass to gurobi as warm start
-			sol = MILP_Warm_Start(set_temp, sol);
+			//sol = MILP_Warm_Start(set_temp, sol);
+			sol = milpSolver(set_temp, sol);
 
 			// vec_call.clear();
 			call_info.call_id = ++call_num;
@@ -440,7 +443,8 @@ namespace std
 		set_temp = nodesSets[gID];
 
 		// pass to gurobi as warm start
-		sol = MILP_Warm_Start(set_temp, p);
+		//sol = MILP_Warm_Start(set_temp, p);
+		sol = milpSolver(set_temp, p);
 
 		call_info.call_id = ++call_num;
 		call_info.T = set_temp.cvLines.size() * 2;
@@ -461,7 +465,9 @@ namespace std
 		return sol;
 	}
 
-	Solution::path Solution::MILP_Warm_Start(Set nodes_set, path initial_sol)
+	// MILP solver for coverage set
+	// returns a path with the best solution
+	Solution::path Solution::milpSolver(Set nodes_set, path initial_sol)
 	{
 		int i, j;
 
@@ -832,77 +838,83 @@ namespace std
 			// model.addConstr(rest17 <= var_d, s);
 			model.addConstr(rest17 <= Elem[1], "Rest17");
 
-			/******************************************************************************************/
-			//-----------------------------------------------------
-			// Build initial solution hints for the MILP warm start
-			//-----------------------------------------------------
+			// Determines whether a warm start can be applied by checking if the initial solution contains any edges.
+			bool hasWarmStart = !initial_sol.edges.empty();
 
-			// Temporary variables for x_ij edges to define warm start structure (not added to model)
-			vector<vector<GRBVar>> vars_x_temp(N, vector<GRBVar>(N));
-			for (i = 0; i < N; i++)
-				for (j = 0; j < N; j++)
-				{
-					if (i != j)
-						vars_x_temp[i][j] = model.addVar(0.0, 1.0, 0.0, GRB_BINARY, "x_temp_" + itos(i) + "_" + itos(j));
-				}
-
-			// Fuel placeholder
-			double fuel;
-
-			// Create a matrix of initial values (0.0 by default)
-			vector<vector<double>> start_vals(N, vector<double>(N, 0.0));
-
-			// Loop through each edge in the initial solution
-			for (auto edge : initial_sol.edges)
+			if (hasWarmStart)
 			{
-				// Find the integer node IDs from CVSet IDs
-				auto it_a = map_cvset_id_to_node_id.find(edge.node_a);
-				auto it_b = map_cvset_id_to_node_id.find(edge.node_b);
+				/******************************************************************************************/
+				//-----------------------------------------------------
+				// Build initial solution hints for the MILP warm start
+				//-----------------------------------------------------
 
-				// Skip if the edge contains unknown nodes
-				if (it_a == map_cvset_id_to_node_id.end() || it_b == map_cvset_id_to_node_id.end())
-					continue;
-
-				i = it_a->second;
-				j = it_b->second;
-
-				// Skip self-loops (which are not valid in the MILP model)
-				if (i == j)
-					continue;
-
-				// Mark this edge as used in the warm start
-				start_vals[i][j] = 1.0;
-
-				// If the target node is a coverage target (not a depot), define fuel hints
-				if (j >= D)
-				{
-					auto fuelIt = initial_sol.fuelOnTarget.find(edge.node_b);
-					if (fuelIt != initial_sol.fuelOnTarget.end())
+				// Temporary variables for x_ij edges to define warm start structure (not added to model)
+				vector<vector<GRBVar>> vars_x_temp(N, vector<GRBVar>(N));
+				for (i = 0; i < N; i++)
+					for (j = 0; j < N; j++)
 					{
-						// Estimate remaining fuel and set as hint for z[i][j]
-						fuel = input.getRobotFuel(robotID) - fuelIt->second;
-						vars_z[i][j].set(GRB_DoubleAttr_VarHintVal, fuel);
+						if (i != j)
+							vars_x_temp[i][j] = model.addVar(0.0, 1.0, 0.0, GRB_BINARY, "x_temp_" + itos(i) + "_" + itos(j));
+					}
+
+				// Fuel placeholder
+				double fuel;
+
+				// Create a matrix of initial values (0.0 by default)
+				vector<vector<double>> start_vals(N, vector<double>(N, 0.0));
+
+				// Loop through each edge in the initial solution
+				for (auto edge : initial_sol.edges)
+				{
+					// Find the integer node IDs from CVSet IDs
+					auto it_a = map_cvset_id_to_node_id.find(edge.node_a);
+					auto it_b = map_cvset_id_to_node_id.find(edge.node_b);
+
+					// Skip if the edge contains unknown nodes
+					if (it_a == map_cvset_id_to_node_id.end() || it_b == map_cvset_id_to_node_id.end())
+						continue;
+
+					i = it_a->second;
+					j = it_b->second;
+
+					// Skip self-loops (which are not valid in the MILP model)
+					if (i == j)
+						continue;
+
+					// Mark this edge as used in the warm start
+					start_vals[i][j] = 1.0;
+
+					// If the target node is a coverage target (not a depot), define fuel hints
+					if (j >= D)
+					{
+						auto fuelIt = initial_sol.fuelOnTarget.find(edge.node_b);
+						if (fuelIt != initial_sol.fuelOnTarget.end())
+						{
+							// Estimate remaining fuel and set as hint for z[i][j]
+							fuel = input.getRobotFuel(robotID) - fuelIt->second;
+							vars_z[i][j].set(GRB_DoubleAttr_VarHintVal, fuel);
+						}
 					}
 				}
-			}
 
-			// Set warm start values for x_ij decision variables in model
-			for (i = 0; i < N; i++)
-				for (j = 0; j < N; j++)
+				// Set warm start values for x_ij decision variables in model
+				for (i = 0; i < N; i++)
+					for (j = 0; j < N; j++)
+					{
+						if (i != j)
+							vars_x[i][j].set(GRB_DoubleAttr_Start, start_vals[i][j]);
+					}
+
+				// Assume initially that no depot is used
+				for (i = 0; i < D - 1; i++)
+					vars_d[i].set(GRB_DoubleAttr_VarHintVal, 0.0);
+
+				// Set depot hints for known depots from initial solution
+				for (auto depot : initial_sol.depots)
 				{
-					if (i != j)
-						vars_x[i][j].set(GRB_DoubleAttr_Start, start_vals[i][j]);
+					i = map_cvset_id_to_node_id.find(depot)->second;
+					vars_d[i].set(GRB_DoubleAttr_VarHintVal, 1.0);
 				}
-
-			// Assume initially that no depot is used
-			for (i = 0; i < D - 1; i++)
-				vars_d[i].set(GRB_DoubleAttr_VarHintVal, 0.0);
-
-			// Set depot hints for known depots from initial solution
-			for (auto depot : initial_sol.depots)
-			{
-				i = map_cvset_id_to_node_id.find(depot)->second;
-				vars_d[i].set(GRB_DoubleAttr_VarHintVal, 1.0);
 			}
 
 			/******************************************************************************************/
@@ -1080,463 +1092,6 @@ namespace std
 		}
 
 		// Return either the valid solution or a placeholder with pCost = -1 for infeasibility
-		return sol;
-	}
-
-	Solution::path Solution::MILP(Set nodes_set)
-	{
-		int i, j, T, D, N;
-		int baseId = 0;
-		std::chrono::time_point<std::chrono::system_clock> start, end;
-
-		path sol;
-		sol.pID = -1;
-		// colocar as informações do node_set no formato da entrada da programação inteira, chamada de coverage_set
-
-		Convert_NS_to_CS(nodes_set);
-
-		T = getTargetNum(); // set of targets
-		D = getDepotNum();	// fueling depots
-
-		N = T + D; // total nodes
-
-		int robotID = nodes_set.robotID;
-
-		// base position on coverageSet;
-		baseId = getBaseID();
-
-		try
-		{
-			// GRBEnv env = GRBEnv();
-
-			GRBModel model = GRBModel(env);
-			model.set(GRB_IntParam_OutputFlag, 0);
-
-			// Must set LazyConstraints parameter when using lazy constraints
-			model.set(GRB_IntParam_LazyConstraints, 1);
-
-			model.set(GRB_IntParam_Threads, 0); // usa todos os núcleos da CPU
-
-			// model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
-			GRBVar *Elem = 0;
-
-			Elem = model.addVars(2);
-
-			Elem[0] = model.addVar(0, GRB_INFINITY, 0.0, GRB_CONTINUOUS, "Pmax");
-			Elem[1] = model.addVar(0, D - 1, 0.0, GRB_INTEGER, "Dmax");
-
-			Elem[0].set(GRB_StringAttr_VarName, "vars_Pmax");
-			Elem[0].set(GRB_CharAttr_VType, GRB_CONTINUOUS);
-
-			Elem[1].set(GRB_StringAttr_VarName, "vars_Dmin");
-			Elem[1].set(GRB_CharAttr_VType, GRB_INTEGER);
-
-			GRBLinExpr objn = 0;
-
-			// setar e configurar o objetivo 0
-			objn = Elem[0];
-			model.setObjectiveN(objn, 0, 0, 0.9999);
-
-			// setar e configurar o objetivo 1
-			objn = Elem[1];
-			model.setObjectiveN(objn, 1, 0, 0.0001);
-
-			/***************** Objective Function *****************/
-			model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
-			model.update();
-
-			GRBVar **vars_x = NULL;
-			vars_x = new GRBVar *[N];
-			for (i = 0; i < N; i++)
-				vars_x[i] = new GRBVar[N];
-
-			GRBVar *vars_d = new GRBVar[D - 1];
-
-			// vars_x[i][j] = model.addVar(0, 1, 0, GRB_BINARY, "x_i_"+itos(i)+"_j_"+itos(j));
-			//  Create decision variables x_ijk for all edges ...alteração do upper bound de T para 1
-			for (i = 0; i < N; i++)
-			{
-				for (j = 0; j < N; j++)
-				{ // depot to depot
-					vars_x[i][j] = model.addVar(0, 1, 0, GRB_BINARY, "x_i_" + itos(i) + "_j_" + itos(j));
-				}
-			}
-
-			vector<vector<GRBVar>> vars_z(N, vector<GRBVar>(N));
-			// GRBVar vars_z[N][N];
-			for (i = 0; i < N; i++)
-			{
-				for (j = 0; j < N; j++)
-				{
-					// vars_z[i][j] = model.addVar(-GRB_INFINITY, GRB_INFINITY, 0.0, GRB_CONTINUOUS, "z_i" + itos(i) + "_j_" + itos(j));
-					vars_z[i][j] = model.addVar(0.0, GRB_INFINITY, 0.0, GRB_CONTINUOUS, "z_i" + itos(i) + "_j_" + itos(j));
-				}
-			}
-
-			// GRBVar vars_d[D-1];
-			for (i = 0; i < D - 1; i++)
-			{
-				vars_d[i] = model.addVar(0.0, 1.0, 0, GRB_BINARY, "d_" + itos(i));
-			}
-			/******************** Constraints *****************/
-			// Constraint 1: SUM SUM(1+ q_k)c_ij * x_ijk <= Pmax  k=0, ..., M-1
-			GRBLinExpr rest1 = 0;
-			for (i = 0; i < N; i++)
-			{
-				for (j = 0; j < N; j++)
-				{
-					rest1 += (getCost(i, j) * vars_x[i][j]) + (input.getRobotProp(robotID) * getCost(i, j) * vars_x[i][j]);
-				}
-			}
-			string s = "Rest1";
-			model.addConstr(rest1 <= Elem[0], s);
-
-			/**************** Degree Constraints ***********************/
-			// Constraint 2: SUM x_di = SUM x_id para qualquer d em D diferente da base
-			//  From any target(i) there is only one robot(k) going to the vertice(j)
-			for (int d = 0; d < D - 1; d++)
-			{ // apenas depots sem a base
-				GRBLinExpr rest2_1 = 0;
-				GRBLinExpr rest2_2 = 0;
-				for (i = 0; i < N; i++)
-				{
-					rest2_1 += vars_x[d][i];
-					rest2_2 += vars_x[i][d];
-				}
-				string s = "Rest2_d_" + itos(d);
-				model.addConstr(rest2_1 == rest2_2, s);
-			}
-
-			// Constraint 3a: SUM x_id >= y_d para qualquer d em D diferente da base
-			// Constraint 3b: SUM x_di >= y_d * N para qualquer d em D diferente da base
-			//  N = (0.5*(D*(D-1))+T) quantidade de ligações entre depots + target e depots
-			for (int d = 0; d < D - 1; d++)
-			{ // apenas depots sem a base
-				GRBLinExpr rest3_b = 0;
-				for (i = 0; i < N; i++)
-				{
-					rest3_b += vars_x[i][d];
-				}
-				string s = "Rest3_a_d_" + itos(d);
-				model.addConstr(rest3_b >= vars_d[d], s);
-				s = "Rest3_b_d_" + itos(d);
-				// model.addConstr(rest3_b <= N*vars_d[d], s);
-				model.addConstr(rest3_b <= (0.5 * (D * (D - 1)) + D * T) * vars_d[d], s);
-			}
-
-			// Constraint 4: SUM x_di <= y_d para qualquer d em D diferente da base
-			for (int d = 0; d < D - 1; d++)
-			{ // apenas depots sem a base
-
-				string s = "Rest4_a_" + itos(d);
-				model.addConstr(0 <= vars_d[d], s);
-
-				s = "Rest4_b_" + itos(d);
-				model.addConstr(vars_d[d] <= 1, s);
-			}
-
-			// Constraint 5: [SUM x_id0 == m)
-			GRBLinExpr rest5 = 0;
-			for (i = 0; i < N; i++)
-			{
-				rest5 += vars_x[i][baseId];
-			}
-			s = "Rest5";
-			model.addConstr(rest5 == 1, s);
-
-			// Constraint 6: [SUM x_d0i == 1]
-			GRBLinExpr rest6 = 0;
-			for (i = 0; i < N; i++)
-			{
-				rest6 += vars_x[baseId][i];
-			}
-			s = "Rest6";
-			model.addConstr(rest6 == 1, s);
-
-			// Constraint 7: SUM x_ij = 1 i em V e j em T
-			for (int j = D; j < N; j++)
-			{ // cada target
-				GRBLinExpr rest7 = 0;
-				for (i = 0; i < N; i++)
-				{
-					rest7 += vars_x[i][j];
-				}
-				string s = "Rest7_j_" + itos(j);
-				model.addConstr(rest7 == 1, s);
-			}
-
-			// Constraint 8: SUM x_ji = 1 i em V e j em T
-			for (int j = D; j < N; j++)
-			{ // cada target
-				GRBLinExpr rest8 = 0;
-				for (i = 0; i < N; i++)
-				{
-					rest8 += vars_x[j][i];
-				}
-				string s = "Rest8_j_" + itos(j);
-				model.addConstr(rest8 == 1, s);
-			}
-
-			// Constraint 9
-			GRBLinExpr rest9 = 0;
-			for (int i = 0; i < N; i++)
-			{ // cada target
-				// skip self_loop
-				rest9 += vars_x[i][i];
-			}
-			model.addConstr(rest9 == 0, "Rest9");
-
-			// Constraint 10: SUM z_ij - SUM z_ji = SUM f_ij * x_ij, sendo i  qualquer target
-			for (i = D; i < N; i++)
-			{
-				GRBLinExpr rest10_1 = 0;
-				GRBLinExpr rest10_2 = 0;
-				GRBLinExpr rest10_3 = 0;
-
-				for (j = 0; j < N; j++)
-				{
-					rest10_1 += vars_z[i][j];
-					rest10_2 += vars_z[j][i];
-					rest10_3 += getCost(i, j) * vars_x[i][j];
-				}
-				string s = "Rest10_i" + itos(i);
-				model.addConstr(rest10_1 - rest10_2 == rest10_3, s);
-			}
-
-			// constraint 11: z_di = f_di * x_di , sendo i qualquer target e d em D
-			// no artigo está definido  de depot para target, isso exclui a limitação da aresta no caso de depot para depot
-			// por isso alteramos o índice i para empregar qualquer vértice
-			for (i = 0; i < N; ++i)
-			{
-				GRBLinExpr rest11_1 = 0;
-				GRBLinExpr rest11_2 = 0;
-
-				for (int d = 0; d < D; d++)
-				{
-					rest11_1 = vars_z[d][i];
-					rest11_2 = getCost(d, i) * vars_x[d][i];
-					string s = "Rest11_d" + itos(d) + "_i_" + itos(i);
-					model.addConstr(rest11_1 == rest11_2, s);
-				}
-			}
-
-			//------------------------------------------------------------------------------
-			// constraint 12  z_i_j <(F-t_j)x_ij para qualquer j em T, (i,j) em E
-			for (i = 0; i < N; i++)
-			{
-				GRBLinExpr rest12_1 = 0;
-				GRBLinExpr rest12_2 = 0;
-				for (j = D; j < N; j++)
-				{
-
-					rest12_1 = vars_z[i][j];
-					rest12_2 = (input.getRobotFuel(robotID) - get_min_fuel_2_depot(j)) * vars_x[i][j];
-					s = "Rest12_i_" + itos(i) + "_j_" + itos(j);
-					model.addConstr(rest12_1 <= rest12_2, s);
-				}
-			}
-
-			// constraint 13  z_i_d <(F*x_ij) para qualquer i em V, d em D
-			for (i = 0; i < N; i++)
-			{
-				GRBLinExpr rest13_1 = 0;
-				GRBLinExpr rest13_2 = 0;
-				for (int d = 0; d < D; d++)
-				{
-					rest13_1 = vars_z[i][d];
-					rest13_2 = input.getRobotFuel(robotID) * vars_x[i][d];
-					s = "Rest13_i_" + itos(i) + "_d_" + itos(d);
-					model.addConstr(rest13_1 <= rest13_2, s);
-				}
-			}
-
-			// constraint 14  z_i_j >= (s_i + f_ij)*x_ij para qualquer i em T, (i,j) em E
-			for (i = D; i < N; i++)
-			{
-				GRBLinExpr rest14_1 = 0;
-				GRBLinExpr rest14_2 = 0;
-
-				for (j = 0; j < N; j++)
-				{
-					rest14_1 = vars_z[i][j];
-					rest14_2 = (get_min_fuel_2_depot(i) + getCost(i, j)) * vars_x[i][j];
-
-					s = "Rest14_i_" + itos(i) + "_j_" + itos(j);
-					model.addConstr(rest14_1 >= rest14_2, s);
-				}
-			}
-
-			//******************* Coverage Constraints **************************/
-			// constraint 15: sum X_i_i+1_k + sum X_i+1_i_k = 1, i=D,D+2,...N-1
-			for (i = D; i < N; i = i + 2)
-			{
-				GRBLinExpr rest15 = 0;
-				rest15 += vars_x[i][i + 1] + vars_x[i + 1][i];
-				string s = "Rest15_i_" + itos(i);
-				model.addConstr(rest15 == 1, s);
-			}
-			// constraint 16: sum X_i_i+1_k = Sum Sum X_i_j_k, i = 2,4,N
-			for (i = D; i < N; i = i + 2)
-			{
-				GRBLinExpr rest16_1 = 0;
-				GRBLinExpr rest16_2 = 0;
-				rest16_1 += vars_x[i][i + 1];
-				for (j = D + 1; j < N; j = j + 2)
-					rest16_2 += vars_x[i][j];
-
-				string s = "Rest16_i_" + itos(i);
-				model.addConstr(rest16_1 == rest16_2, s);
-			}
-
-			// constraint 17: sum X_i_i-1_k = Sum Sum X_i_j_k, i =
-			for (i = D + 1; i < N; i = i + 2)
-			{
-				GRBLinExpr rest17_1 = 0;
-				GRBLinExpr rest17_2 = 0;
-				rest17_1 += vars_x[i][i - 1];
-				for (j = D; j < N; j = j + 2)
-					rest17_2 += vars_x[i][j];
-
-				string s = "Rest17_i_" + itos(i);
-				model.addConstr(rest17_1 == rest17_2, s);
-			}
-			/********************Depot Constraint ***********************************************/
-			// Contraint 18: Dmin ==SumD[j]
-			GRBLinExpr rest18 = 0;
-			for (j = 0; j < D - 1; j++)
-			{ // vertice
-				rest18 += vars_d[j];
-			}
-			// model.addConstr(rest18 == Elem[1], "Rest18");
-			model.addConstr(rest18 <= Elem[1], "Rest18");
-
-			/******************************************************************************************/
-
-			// for(i =0;i<N;++i)
-			// vars_x[i][i].set(GRB_DoubleAttr_UB,0);//
-			model.set(GRB_IntParam_LogToConsole, 0);
-			model.set(GRB_DoubleParam_MIPGap, 0.01);
-
-			subtourelim cb = subtourelim(vars_x, N, vars_d, D - 1, 0);
-			model.setCallback(&cb);
-
-			model.update();
-
-			start = std::chrono::system_clock::now();
-			model.optimize();
-
-			end = std::chrono::system_clock::now();
-			// obter o tempo necessário para otimizar a rota;
-			gurobi_optimize_time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-
-			model.update();
-
-			int optimstatus = model.get(GRB_IntAttr_Status);
-
-			if (optimstatus == GRB_OPTIMAL)
-			{
-
-				// set cost and robot to the solution
-				sol.pCost = Elem[0].get(GRB_DoubleAttr_X);
-				sol.robotID = robotID;
-				sol.pID = nodes_set.set_id;
-				sol.depotsNum = Elem[1].get(GRB_DoubleAttr_X);
-				sol.targetsNum = 0;
-
-				double fcost = 0;
-				double time = 0;
-				vector<pair<int, pair<pair<int, int>, pair<double, double>>>> output;
-				vector<pair<int, edge>> grb_out;
-				edge e;
-
-				int commodity = 0;
-
-				// set the path to the solution
-				for (i = 0; i < N; i++)
-				{
-
-					// insere a quantidade de combustível no target i
-					for (j = 0; j < N; j++)
-					{
-						if (vars_x[i][j].get(GRB_DoubleAttr_X) >= 0.98)
-						{
-
-							if (j >= D)
-							{
-								sol.fuelOnTarget.emplace(getIndex(j), input.getRobotFuel(robotID) - vars_z[i][j].get(GRB_DoubleAttr_X));
-							}
-							commodity = vars_z[i][j].get(GRB_DoubleAttr_X);
-							// não inserimos a base que é referenciada pelo índice D
-							if (i < D - 1)
-							{
-								sol.depots.insert(getIndex(i));
-							}
-							else if (i >= D)
-							{
-								sol.targetsNum++;
-							}
-
-							time = getCost(i, j);
-							fcost = time + (input.getRobotProp(robotID) * time);
-
-							e.cost = fcost;
-							e.time = time;
-							e.node_a = getIndex(i);
-							e.node_b = getIndex(j);
-
-							grb_out.emplace_back(make_pair(commodity, e));
-						}
-					}
-				}
-
-				// ordernar pelo valor da commodity do menor para a maior
-				sort(grb_out.begin(), grb_out.end(),
-					 [](pair<int, edge> el_1, pair<int, edge> el_2)
-					 {
-						 return el_1.first > el_2.first;
-					 });
-
-				// inserir o caminho na solução
-				for (auto itvec : grb_out)
-					sol.edges.emplace_back(itvec.second);
-
-				// caso o caminho tenha aresta fora de ordem, não configurando um circuito, ordenar
-				// isso pode ocorrer em depots, visto a possíbilidade de loops, ordenar os diversos loops que passam pelos depots.
-				// if(!IsCircuit(sol))
-				SortMultiplesAdjacentOnDepots(&sol);
-
-				//----------------------------------------- teste temporário para verificar se a capacidade do robô é mantida
-				if (!PathRestrictions(sol))
-					cout << "solução não validada: milp" << endl;
-				//--------------------------------------------------
-
-				// contabilizar o base do robô
-				sol.depotsNum = sol.depots.size() + 1;
-			}
-			else
-			{ // se for inviável
-				// model.computeIIS();
-				// model.write("model.ilp");
-				// model.write("model.lp");
-				sol.pCost = -1;
-				sol.robotID = -1;
-				sol.pID = -1;
-			}
-
-			for (int i = 0; i < N; i++)
-				delete[] vars_x[i];
-			delete[] vars_x;
-			delete[] vars_d;
-		}
-		catch (GRBException &e)
-		{
-			cout << "Error number: " << e.getErrorCode() << endl;
-			cout << e.getMessage() << endl;
-		}
-		catch (...)
-		{
-			cout << "Error during optimization" << endl;
-		}
 		return sol;
 	}
 

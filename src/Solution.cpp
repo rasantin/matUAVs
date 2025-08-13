@@ -12,8 +12,8 @@
 namespace std
 {
 
-	void findsubset(int n, double **sol, vector<vector<int>> *subsets);
-	void DFS(double **g, int v, int n, bool *seen, vector<int> *subset, bool *inserted);
+	void findsubset(int n, vector<vector<double>> &sol, vector<vector<int>> *subsets);
+	void DFS(const vector<vector<double>> &g, int v, int n, bool *seen, vector<int> *subset, bool *inserted);
 
 	class subtourelim : public GRBCallback
 	{
@@ -47,15 +47,24 @@ namespace std
 					// 4. Libera memória alocada
 
 					// Found an integer feasible solution - does it visit every node?
-					double **x = new double *[n];
+					//double **x = new double *[n];
+					
+					vector<vector<double>> x(n, vector<double>(n, 0.0));
+					for (int i = 0; i < n; i++){
+						double* sol = getSolution(vars[i], n);
+						copy(sol, sol + n, x[i].begin());
+					}
+					
 					int i, j;
-					for (i = 0; i < n; i++)
-						x[i] = getSolution(vars[i], n);
+					/*for (i = 0; i < n; i++)
+						// Ensure getSolution allocates with new double[n] or change deallocation accordingly
+						x[i] = getSolution(vars[i], n); // getSolution must allocate with new double[n]*/
 
-					double *y = new double[nd];
+					//double *y = new double[nd];
 
-					for (i = 0; i < nd; i++)
-						y[i] = getSolution(vars_d[i]);
+					vector<double> y(nd, 0.0);
+					double* sol_y = getSolution(vars_d, nd);
+					copy(sol_y, sol_y + nd, y.begin());
 
 					vector<vector<int>> subsets;
 					findsubset(n, x, &subsets);
@@ -137,31 +146,39 @@ namespace std
 									}
 								}
 								// adicinar as restrições para cada depot em S
+								// for (int d : depots_on_subset)
+								// addLazy(expr >= y[d]);
+								const double DEPOT_ACTIVE_THRESHOLD = 0.5;
+								double max_y = 0;
 								for (int d : depots_on_subset)
-									addLazy(expr >= y[d]);
+									if (y[d] > max_y)
+										max_y = y[d];
+
+								if (max_y > DEPOT_ACTIVE_THRESHOLD) // depósito ativo
+									addLazy(expr >= 1);				// exige ligação fora do subconjunto
 							}
 						}
 					}
-
-					for (int i = 0; i < n; i++)
-						delete[] x[i];
-					delete[] y;
+					//for (int i = 0; i < n; i++)
+					//	delete[] x[i];
+					//delete[] x;
+					//delete[] y;
 				}
 			}
 			catch (GRBException &e)
 			{
-				cout << "Error number: " << e.getErrorCode() << endl;
-				cout << e.getMessage() << endl;
+				cout << "[subtourelim callback] Error number: " << e.getErrorCode() << endl;
+				cout << "[subtourelim callback] Message: " << e.getMessage() << endl;
 			}
 			catch (...)
 			{
-				cout << "Error during callback" << endl;
+				cout << "[subtourelim callback] Unknown error during callback" << endl;
 			}
 		}
 	};
 
 	// busca em profundidade para encontrar os componentes conectados
-	void DFS(double **g, int v, int n, bool *seen, vector<int> *subset, bool *inserted)
+	void DFS(const vector<vector<double>> &g, int v, int n, bool *seen, vector<int> *subset, bool *inserted)
 	{
 		seen[v] = true;
 		for (int u = 0; u < n; u++)
@@ -184,7 +201,7 @@ namespace std
 	// Dado uma solução inteira-viável'sol',
 	// retorne os componetes conectados.
 	void findsubset(int n,
-					double **sol,
+					vector<vector<double>> &sol,
 					vector<vector<int>> *subsets)
 	{
 		int i;
@@ -330,7 +347,7 @@ namespace std
 		{
 			set_temp = nodesSets[gID];
 
-			//sol = MILP(set_temp);
+			// sol = MILP(set_temp);
 			sol = milpSolver(set_temp, {});
 
 			// muitas chamadas do gurobi, manteremos apenas a informação da última
@@ -361,7 +378,7 @@ namespace std
 				set_temp.depots = it_sub_set->depots;
 
 				// calcular a solução
-				//sol = MILP(set_temp);
+				// sol = MILP(set_temp);
 				sol = milpSolver(set_temp, {});
 
 				// muitas chamadas do gurobi, materemos apenas a informação da última
@@ -400,7 +417,7 @@ namespace std
 			set_temp = nodesSets[gID];
 
 			// pass to gurobi as warm start
-			//sol = MILP_Warm_Start(set_temp, sol);
+			// sol = MILP_Warm_Start(set_temp, sol);
 			sol = milpSolver(set_temp, sol);
 
 			// vec_call.clear();
@@ -443,7 +460,92 @@ namespace std
 		set_temp = nodesSets[gID];
 
 		// pass to gurobi as warm start
-		//sol = MILP_Warm_Start(set_temp, p);
+		// sol = MILP_Warm_Start(set_temp, p);
+
+		/*exploring a bug in milpSolver
+
+		set_temp.cvLines.clear();
+		set_temp.cvLines.emplace_back(21);
+		set_temp.cvLines.emplace_back(5);
+
+		set_temp.depots.clear();
+		set_temp.depots.emplace_back(33);
+		set_temp.depots.emplace_back(34);
+		set_temp.depots.emplace_back(41);
+		set_temp.depots.emplace_back(46);
+		set_temp.depots.emplace_back(60);
+		set_temp.robotID = 4;
+		set_temp.set_id = 2;
+
+		p.edges.clear();
+		edge e;
+		vector<edge> edges;
+
+		e.node_a = 0;
+		e.node_b = 41;
+		e.time = 448.76;
+		e.cost = 1795.0513883569970;
+		edges.emplace_back(e);
+
+		e.node_a = 41;
+		e.node_b = 5;
+		e.time = 125.03120355283762;
+		e.cost = 500.12481421135050;
+		edges.emplace_back(e);
+
+		e.node_a = 5;
+		e.node_b = 6;
+		e.time = 767.417;
+		e.cost = 3069.6700682271500;
+		edges.emplace_back(e);
+
+		e.node_a = 6;
+		e.node_b = 46;
+		e.time = 163.31;
+		e.cost = 653.2400000000000;
+		edges.emplace_back(e);
+
+		e.node_a = 46;
+		e.node_b = 22;
+		e.time = 172.56;
+		e.cost = 690.2400000000000;
+		edges.emplace_back(e);
+
+		e.node_a = 22;
+		e.node_b = 21;
+		e.time = 734.8;
+		e.cost = 2939.2000000000000;
+		edges.emplace_back(e);
+
+		e.node_a = 21;
+		e.node_b = 41;
+		e.time = 152.10075307533637;
+		e.cost = 608.4020123013455;
+		edges.emplace_back(e);
+
+		e.node_a = 41;
+		e.node_b = 0;
+		e.time = 448.76;
+		e.cost = 1795.0513883569970;
+		edges.emplace_back(e);
+
+		p.edges = std::move(edges);
+
+		p.fuelOnTarget.clear();
+		p.fuelOnTarget.emplace(5, 1074.96);
+		p.fuelOnTarget.emplace(6, 307.55);
+		p.fuelOnTarget.emplace(21, 292.60);
+		p.fuelOnTarget.emplace(22, 1027.43);
+
+		p.robotID = 4;
+		p.pID = 3;
+		p.pCost = 12051.13;
+		p.depots.clear();
+		p.depots.emplace(41);
+		p.depots.emplace(46);
+		p.depotsNum = 3;
+		p.targetsNum = 4; */
+
 		sol = milpSolver(set_temp, p);
 
 		call_info.call_id = ++call_num;
@@ -539,6 +641,7 @@ namespace std
 				for (j = 0; j < N; j++)
 				{
 					vars_z[i][j] = model.addVar(-GRB_INFINITY, GRB_INFINITY, 0.0, GRB_CONTINUOUS, "z_i" + itos(i) + "_j_" + itos(j));
+					// vars_z[i][j] = model.addVar(0.0, GRB_INFINITY, 0.0, GRB_CONTINUOUS, "z_i" + itos(i) + "_j_" + itos(j));
 				}
 			}
 			// Create decision variables d_i for depots (D-1 depots, excluding base)
@@ -614,8 +717,10 @@ namespace std
 				model.addConstr(rest3_b <= (0.5 * (D * (D - 1)) + D * T) * vars_d[d], s);
 			}
 
-			// Constraint 4: A depot can only have outgoing arcs if it is activated
-			// Ensures that if any edge departs from depot d, it must be marked as used (y_d = 1)
+			// Constraint 4: A depot is active only if it has outgoing arcs
+			// Ensures vars_d[d] = 1 => at least one outgoing arc from depot d,
+			// and vars_d[d] = 0 => no outgoing arcs.
+			// Loop excludes the base depot.
 			for (int d = 0; d < D - 1; d++) // excludes the base depot
 			{
 				GRBLinExpr sum_out = 0;
@@ -624,7 +729,8 @@ namespace std
 					if (j != d)
 						sum_out += vars_x[d][j];
 				}
-				model.addConstr(sum_out <= N - 1 * vars_d[d], "Rest4_link_" + itos(d));
+				model.addConstr(vars_d[d] <= sum_out, "Rest4_link_lb_" + itos(d));
+				model.addConstr(sum_out <= (N - 1) * vars_d[d], "Rest4_link_ub_" + itos(d));
 			}
 
 			// Constraint 5: [SUM x_id0 == 1]
@@ -847,16 +953,6 @@ namespace std
 				//-----------------------------------------------------
 				// Build initial solution hints for the MILP warm start
 				//-----------------------------------------------------
-
-				// Temporary variables for x_ij edges to define warm start structure (not added to model)
-				vector<vector<GRBVar>> vars_x_temp(N, vector<GRBVar>(N));
-				for (i = 0; i < N; i++)
-					for (j = 0; j < N; j++)
-					{
-						if (i != j)
-							vars_x_temp[i][j] = model.addVar(0.0, 1.0, 0.0, GRB_BINARY, "x_temp_" + itos(i) + "_" + itos(j));
-					}
-
 				// Fuel placeholder
 				double fuel;
 
@@ -990,7 +1086,6 @@ namespace std
 
 							// Target node: insert remaining fuel information
 							if (j >= D) // D is the number of depots; j >= D means it is a target
-
 							{
 								sol.fuelOnTarget.emplace(getIndex(j), input.getRobotFuel(robotID) - v_z);
 								sol.targetsNum++;

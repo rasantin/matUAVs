@@ -46,9 +46,7 @@ namespace std
 					//    para forçar ligação com o restante do grafo
 					// 4. Libera memória alocada
 
-					// Found an integer feasible solution - does it visit every node?
-					//double **x = new double *[n];
-					
+					// Found an integer feasible solution - does it visit every node?					
 					vector<vector<double>> x(n, vector<double>(n, 0.0));
 					for (int i = 0; i < n; i++){
 						double* sol = getSolution(vars[i], n);

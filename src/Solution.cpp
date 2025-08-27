@@ -9,240 +9,224 @@
 #include <chrono>
 #include <iomanip>
 
-namespace std
+void findsubset(int n, vector<vector<double>> &sol, vector<vector<int>> *subsets);
+void DFS(const vector<vector<double>> &g, int v, int n, bool *seen, vector<int> *subset, bool *inserted);
+
+class subtourelim : public GRBCallback
 {
+public:
+	GRBVar **vars;
+	GRBVar *vars_d;
 
-	void findsubset(int n, vector<vector<double>> &sol, vector<vector<int>> *subsets);
-	void DFS(const vector<vector<double>> &g, int v, int n, bool *seen, vector<int> *subset, bool *inserted);
-
-	class subtourelim : public GRBCallback
+	int n;
+	int nd;
+	int wm;
+	subtourelim(GRBVar **xvars, int xn, GRBVar *yvars, int yn)
 	{
-	public:
-		GRBVar **vars;
-		GRBVar *vars_d;
+		vars = xvars;
+		n = xn;
+		vars_d = yvars;
+		nd = yn;
+	}
 
-		int n;
-		int nd;
-		int wm;
-		subtourelim(GRBVar **xvars, int xn, GRBVar *yvars, int yn, int warm_start)
+protected:
+	void callback()
+	{
+		try
 		{
-			vars = xvars;
-			n = xn;
-			vars_d = yvars;
-			nd = yn;
-			wm = warm_start;
-		}
-
-	protected:
-		void callback()
-		{
-			try
+			if (where == GRB_CB_MIPSOL)
 			{
-				if (where == GRB_CB_MIPSOL)
+				// 1. Recupera solução atual
+				// 2. Identifica subconjuntos desconectados (subtours)
+				// 3. Para cada subconjunto sem a base, adiciona restrição lazy
+				//    para forçar ligação com o restante do grafo
+				// 4. Libera memória alocada
+
+				// Found an integer feasible solution - does it visit every node?
+				vector<vector<double>> x(n, vector<double>(n, 0.0));
+				for (int i = 0; i < n; i++)
 				{
-					// 1. Recupera solução atual
-					// 2. Identifica subconjuntos desconectados (subtours)
-					// 3. Para cada subconjunto sem a base, adiciona restrição lazy
-					//    para forçar ligação com o restante do grafo
-					// 4. Libera memória alocada
+					double *sol = getSolution(vars[i], n);
+					copy(sol, sol + n, x[i].begin());
+					delete[] sol;
+				}
+				int i, j;
 
-					// Found an integer feasible solution - does it visit every node?					
-					vector<vector<double>> x(n, vector<double>(n, 0.0));
-					for (int i = 0; i < n; i++){
-						double* sol = getSolution(vars[i], n);
-						copy(sol, sol + n, x[i].begin());
-					}
-					
-					int i, j;
-					/*for (i = 0; i < n; i++)
-						// Ensure getSolution allocates with new double[n] or change deallocation accordingly
-						x[i] = getSolution(vars[i], n); // getSolution must allocate with new double[n]*/
+				vector<double> y(nd, 0.0);
+				double *sol_y = getSolution(vars_d, nd);
+				copy(sol_y, sol_y + nd, y.begin());
 
-					//double *y = new double[nd];
+				vector<vector<int>> subsets;
+				findsubset(n, x, &subsets);
 
-					vector<double> y(nd, 0.0);
-					double* sol_y = getSolution(vars_d, nd);
-					copy(sol_y, sol_y + nd, y.begin());
+				vector<int> depots_on_subset;
 
-					vector<vector<int>> subsets;
-					findsubset(n, x, &subsets);
+				// all strong connect components tha  does not contain the depot
+				vector<vector<int>> subsets_S;
 
-					vector<int> depots_on_subset;
+				// subset with base node
+				vector<int> not_S;
 
-					// all strong connect components tha  does not contain the depot
-					vector<vector<int>> subsets_S;
+				double obj_bnd = getDoubleInfo(GRB_CB_MIPSOL_OBJBND);
+				if (subsets.size() > 1)
+				{
+					vector<vector<int>> ordered_subsets;
+					// inserire o subset que possui a base no final
+					bool found_base = false;
 
-					// subset with base node
-					vector<int> not_S;
-
-					double obj_bnd = getDoubleInfo(GRB_CB_MIPSOL_OBJBND);
-					// se não for warm start e obj_bnd não definido
-					if (!(wm == 1 && obj_bnd < 0))
+					for (auto set : subsets)
 					{
-
-						if (subsets.size() > 1)
+						// encontrar o grupo que contém a base
+						for (auto vert : set)
 						{
-
-							vector<vector<int>> ordered_subsets;
-							// inserire o subset que possui a base no final
-							bool found_base = false;
-
-							for (auto set : subsets)
-							{
-								// encontrar o grupo que contém a base
-								for (auto vert : set)
-								{
-									if (vert == nd)
-										found_base = true;
-								}
-								if (!found_base)
-								{ // caso o subset não tenha a base insere no vetor
-									subsets_S.emplace_back(set);
-								}
-								else
-								{ // armazenar o subset que contém a base
-									not_S.insert(not_S.end(), set.begin(), set.end());
-									found_base = false;
-								}
-							}
-							ordered_subsets.insert(ordered_subsets.begin(), subsets_S.begin(), subsets_S.end());
-
-							// for(auto it_subset_a = subsets_S.begin(); it_subset_a !=subsets_S.end();it_subset_a++){
-
-							ordered_subsets.push_back(not_S);
-
-							// obter as arestas entre os subconjuntos S e o não S.
-							for (auto it_subset_a = ordered_subsets.begin(); it_subset_a != ordered_subsets.end(); it_subset_a++)
-							{
-
-								if (it_subset_a == ordered_subsets.end() - 1)
-									continue;
-
-								depots_on_subset.clear();
-								for (auto it_id = it_subset_a->begin(); it_id != it_subset_a->end(); it_id++)
-								{
-									if (*it_id < nd)
-										depots_on_subset.emplace_back(*it_id);
-								}
-
-								if (depots_on_subset.empty())
-									continue;
-
-								GRBLinExpr expr = 0;
-								for (auto it_subset_b = ordered_subsets.begin(); it_subset_b != ordered_subsets.end(); it_subset_b++)
-								{
-									if (it_subset_b == it_subset_a)
-										continue;
-									for (auto it_id_i = it_subset_a->begin(); it_id_i != it_subset_a->end(); it_id_i++)
-									{
-										i = *it_id_i;
-										for (auto it_id_j = it_subset_b->begin(); it_id_j != it_subset_b->end(); it_id_j++)
-										{
-											j = *it_id_j;
-											expr += vars[i][j];
-										}
-									}
-								}
-								// adicinar as restrições para cada depot em S
-								// for (int d : depots_on_subset)
-								// addLazy(expr >= y[d]);
-								const double DEPOT_ACTIVE_THRESHOLD = 0.5;
-								double max_y = 0;
-								for (int d : depots_on_subset)
-									if (y[d] > max_y)
-										max_y = y[d];
-
-								if (max_y > DEPOT_ACTIVE_THRESHOLD) // depósito ativo
-									addLazy(expr >= 1);				// exige ligação fora do subconjunto
-							}
+							if (vert == nd)
+								found_base = true;
+						}
+						if (!found_base)
+						{ // caso o subset não tenha a base insere no vetor
+							subsets_S.emplace_back(set);
+						}
+						else
+						{ // armazenar o subset que contém a base
+							not_S.insert(not_S.end(), set.begin(), set.end());
+							found_base = false;
 						}
 					}
-					//for (int i = 0; i < n; i++)
-					//	delete[] x[i];
-					//delete[] x;
-					//delete[] y;
+					ordered_subsets.insert(ordered_subsets.begin(), subsets_S.begin(), subsets_S.end());
+
+					// for(auto it_subset_a = subsets_S.begin(); it_subset_a !=subsets_S.end();it_subset_a++){
+
+					ordered_subsets.push_back(not_S);
+
+					// obter as arestas entre os subconjuntos S e o não S.
+					for (auto it_subset_a = ordered_subsets.begin(); it_subset_a != ordered_subsets.end(); it_subset_a++)
+					{
+
+						if (it_subset_a == ordered_subsets.end() - 1)
+							continue;
+
+						depots_on_subset.clear();
+						for (auto it_id = it_subset_a->begin(); it_id != it_subset_a->end(); it_id++)
+						{
+							if (*it_id < nd)
+								depots_on_subset.emplace_back(*it_id);
+						}
+
+						if (depots_on_subset.empty())
+							continue;
+
+						GRBLinExpr expr = 0;
+						for (auto it_subset_b = ordered_subsets.begin(); it_subset_b != ordered_subsets.end(); it_subset_b++)
+						{
+							if (it_subset_b == it_subset_a)
+								continue;
+							for (auto it_id_i = it_subset_a->begin(); it_id_i != it_subset_a->end(); it_id_i++)
+							{
+								i = *it_id_i;
+								for (auto it_id_j = it_subset_b->begin(); it_id_j != it_subset_b->end(); it_id_j++)
+								{
+									j = *it_id_j;
+									expr += vars[i][j];
+								}
+							}
+						}
+						// adicinar as restrições para cada depot em S
+						// for (int d : depots_on_subset)
+						// addLazy(expr >= y[d]);
+						const double DEPOT_ACTIVE_THRESHOLD = 0.5;
+						double max_y = 0;
+						for (int d : depots_on_subset)
+							if (y[d] > max_y)
+								max_y = y[d];
+
+						if (max_y > DEPOT_ACTIVE_THRESHOLD) // depósito ativo
+							addLazy(expr >= 1);				// exige ligação fora do subconjunto
+					}
 				}
-			}
-			catch (GRBException &e)
-			{
-				cout << "[subtourelim callback] Error number: " << e.getErrorCode() << endl;
-				cout << "[subtourelim callback] Message: " << e.getMessage() << endl;
-			}
-			catch (...)
-			{
-				cout << "[subtourelim callback] Unknown error during callback" << endl;
 			}
 		}
-	};
-
-	// busca em profundidade para encontrar os componentes conectados
-	void DFS(const vector<vector<double>> &g, int v, int n, bool *seen, vector<int> *subset, bool *inserted)
-	{
-		seen[v] = true;
-		for (int u = 0; u < n; u++)
+		catch (GRBException &e)
 		{
-			if (g[v][u] > 0.5)
+			cout << "[subtourelim callback] Error number: " << e.getErrorCode() << endl;
+			cout << "[subtourelim callback] Message: " << e.getMessage() << endl;
+		}
+		catch (...)
+		{
+			cout << "[subtourelim callback] Unknown error during callback" << endl;
+		}
+	}
+};
+
+// busca em profundidade para encontrar os componentes conectados
+void DFS(const vector<vector<double>> &g, int v, int n, bool *seen, vector<int> *subset, bool *inserted)
+{
+	seen[v] = true;
+	for (int u = 0; u < n; u++)
+	{
+		if (g[v][u] > 0.5)
+		{
+			if (!inserted[v])
 			{
-				if (!inserted[v])
-				{
-					subset->push_back(v);
-					inserted[v] = true;
-				}
-				if (!seen[u])
-				{
-					DFS(g, u, n, seen, subset, inserted);
-				}
+				subset->push_back(v);
+				inserted[v] = true;
+			}
+			if (!seen[u])
+			{
+				DFS(g, u, n, seen, subset, inserted);
 			}
 		}
 	}
+}
 
-	// Dado uma solução inteira-viável'sol',
-	// retorne os componetes conectados.
-	void findsubset(int n,
-					vector<vector<double>> &sol,
-					vector<vector<int>> *subsets)
+// Dado uma solução inteira-viável'sol',
+// retorne os componetes conectados.
+void findsubset(int n,
+				vector<vector<double>> &sol,
+				vector<vector<int>> *subsets)
+{
+	int i;
+
+	subsets->clear();
+	vector<int> subset;
+
+	bool *node_seen = new bool[n];
+	for (i = 0; i < n; i++)
+		node_seen[i] = false;
+
+	bool *inserted = new bool[n];
+	for (i = 0; i < n; i++)
+		inserted[i] = false;
+
+	// encontrar os componetes conectados
+	for (int v = 0; v < n; v++)
 	{
-		int i;
+		if (!node_seen[v])
+			DFS(sol, v, n, node_seen, &subset, inserted);
 
-		subsets->clear();
-		vector<int> subset;
-
-		bool *node_seen = new bool[n];
-		for (i = 0; i < n; i++)
-			node_seen[i] = false;
-
-		bool *inserted = new bool[n];
-		for (i = 0; i < n; i++)
-			inserted[i] = false;
-
-		// encontrar os componetes conectados
-		for (int v = 0; v < n; v++)
+		if (!subset.empty())
 		{
-			if (!node_seen[v])
-				DFS(sol, v, n, node_seen, &subset, inserted);
-
-			if (!subset.empty())
-			{
-				subsets->push_back(subset);
-				subset.clear();
-			}
+			subsets->push_back(subset);
+			subset.clear();
 		}
-		delete[] node_seen;
-		delete[] inserted;
 	}
+	delete[] node_seen;
+	delete[] inserted;
+}
 
-	/**
-	 * @brief Calcula a solução inicial para todos os grupos de cobertura.
-	 *
-	 * - Encontra o melhor caminho (rota) para cada grupo usando bestPath().
-	 * - Calcula algumas métricas (custo total, caminho mais custoso, tempo de execução).
-	 * - Prepara a estrutura de solução inicial para otimização posterior.
-	 *
-	 * @param s Ponteiro para a estrutura solution que será preenchida com os resultados.
-	 * @throws std::runtime_error Se bestPath() retornar um custo negativo (falha na construção).
-	 * @note O vetor de depots não inclui a base, pois esta não sofrerá modificações.
-	 */
+/**
+ * @brief Calcula a solução inicial para todos os grupos de cobertura.
+ *
+ * - Encontra o melhor caminho (rota) para cada grupo usando bestPath().
+ * - Calcula algumas métricas (custo total, caminho mais custoso, tempo de execução).
+ * - Prepara a estrutura de solução inicial para otimização posterior.
+ *
+ * @param s Ponteiro para a estrutura solution que será preenchida com os resultados.
+ * @throws std::runtime_error Se bestPath() retornar um custo negativo (falha na construção).
+ * @note O vetor de depots não inclui a base, pois esta não sofrerá modificações.
+ */
 
+namespace std
+{
 	void Solution::initSol(solution *s)
 	{
 		// 1. Inicializa variáveis para rastrear:
@@ -460,89 +444,87 @@ namespace std
 		// pass to gurobi as warm start
 		// sol = MILP_Warm_Start(set_temp, p);
 
-		/*exploring a bug in milpSolver
+		/*exploring a bug in milpSolver*/
+		/*if (gID == 4)
+		{
 
-		set_temp.cvLines.clear();
-		set_temp.cvLines.emplace_back(21);
-		set_temp.cvLines.emplace_back(5);
+			set_temp.cvLines.clear();
+			set_temp.cvLines.emplace_back(9);
 
-		set_temp.depots.clear();
-		set_temp.depots.emplace_back(33);
-		set_temp.depots.emplace_back(34);
-		set_temp.depots.emplace_back(41);
-		set_temp.depots.emplace_back(46);
-		set_temp.depots.emplace_back(60);
-		set_temp.robotID = 4;
-		set_temp.set_id = 2;
+			set_temp.depots.clear();
+			set_temp.depots.emplace_back(34);
+			set_temp.depots.emplace_back(40);
+			set_temp.depots.emplace_back(43);
+			set_temp.robotID = 0;
+			set_temp.set_id = 4;
 
-		p.edges.clear();
-		edge e;
-		vector<edge> edges;
+			p.edges.clear();
+			edge e;
+			vector<edge> edges;
 
-		e.node_a = 0;
-		e.node_b = 41;
-		e.time = 448.76;
-		e.cost = 1795.0513883569970;
-		edges.emplace_back(e);
+			e.node_a = 0;
+			e.node_b = 43;
+			e.time = 387.06;
+			e.cost = 1443.73;
+			edges.emplace_back(e);
 
-		e.node_a = 41;
-		e.node_b = 5;
-		e.time = 125.03120355283762;
-		e.cost = 500.12481421135050;
-		edges.emplace_back(e);
+			e.node_a = 43;
+			e.node_b = 9;
+			e.time = 384.00;
+			e.cost = 1432.33;
+			edges.emplace_back(e);
 
-		e.node_a = 5;
-		e.node_b = 6;
-		e.time = 767.417;
-		e.cost = 3069.6700682271500;
-		edges.emplace_back(e);
+			e.node_a = 9;
+			e.node_b = 10;
+			e.time = 786.42;
+			e.cost = 2933.37;
+			edges.emplace_back(e);
 
-		e.node_a = 6;
-		e.node_b = 46;
-		e.time = 163.31;
-		e.cost = 653.2400000000000;
-		edges.emplace_back(e);
+			e.node_a = 10;
+			e.node_b = 40;
+			e.time = 0;
+			e.cost = 0;
+			edges.emplace_back(e);
 
-		e.node_a = 46;
-		e.node_b = 22;
-		e.time = 172.56;
-		e.cost = 690.2400000000000;
-		edges.emplace_back(e);
+			e.node_a = 40;
+			e.node_b = 43;
+			e.time = 1167.60;
+			e.cost = 4355.16;
+			edges.emplace_back(e);
 
-		e.node_a = 22;
-		e.node_b = 21;
-		e.time = 734.8;
-		e.cost = 2939.2000000000000;
-		edges.emplace_back(e);
+			e.node_a = 43;
+			e.node_b = 40;
+			e.time = 1167.60;
+			e.cost = 4355.16;
+			edges.emplace_back(e);
 
-		e.node_a = 21;
-		e.node_b = 41;
-		e.time = 152.10075307533637;
-		e.cost = 608.4020123013455;
-		edges.emplace_back(e);
+			e.node_a = 40;
+			e.node_b = 43;
+			e.time = 1167.60;
+			e.cost = 4355.16;
+			edges.emplace_back(e);
 
-		e.node_a = 41;
-		e.node_b = 0;
-		e.time = 448.76;
-		e.cost = 1795.0513883569970;
-		edges.emplace_back(e);
+			e.node_a = 43;
+			e.node_b = 0;
+			e.time = 387.06;
+			e.cost = 1443.73;
+			edges.emplace_back(e);
 
-		p.edges = std::move(edges);
+			p.edges = std::move(edges);
 
-		p.fuelOnTarget.clear();
-		p.fuelOnTarget.emplace(5, 1074.96);
-		p.fuelOnTarget.emplace(6, 307.55);
-		p.fuelOnTarget.emplace(21, 292.60);
-		p.fuelOnTarget.emplace(22, 1027.43);
+			p.fuelOnTarget.clear();
+			p.fuelOnTarget.emplace(9, 936);
+			p.fuelOnTarget.emplace(10, 149.56);
 
-		p.robotID = 4;
-		p.pID = 3;
-		p.pCost = 12051.13;
-		p.depots.clear();
-		p.depots.emplace(41);
-		p.depots.emplace(46);
-		p.depotsNum = 3;
-		p.targetsNum = 4; */
+			p.robotID = 0;
+			p.pID = 4;
+			p.pCost = 20318.67;
+			p.depots.clear();
+			p.depots.emplace(40);
+			p.depots.emplace(43);
+			p.depotsNum = 3;
+			p.targetsNum = 2;
+		}*/
 
 		sol = milpSolver(set_temp, p);
 
@@ -677,6 +659,8 @@ namespace std
 			// then adds a constraint ensuring the number of incoming edges equals the number of outgoing edges.
 			// This guarantees that each depot (except the base) has balanced flow,
 			// preventing inconsistencies in the graph flow and facilitating the formation of valid circuits.
+			//
+			// for (int j = 0; j < N; j++)
 			for (int d = 0; d < D - 1; d++)
 			{ // apenas depots sem a base
 				GRBLinExpr rest2_1 = 0;
@@ -701,7 +685,7 @@ namespace std
 			// corresponding to the maximum possible number of incoming arcs to a depot,
 			// including arcs from other depots and targets.
 			// It is used to activate or deactivate constraints conditionally depending on vars_d[d].
-			for (int d = 0; d < D - 1; d++)
+			/*for (int d = 0; d < D - 1; d++)
 			{
 				GRBLinExpr rest3_b = 0;
 				for (i = 0; i < N; i++) // depot and targets
@@ -713,7 +697,7 @@ namespace std
 				model.addConstr(rest3_b >= vars_d[d], s);
 				s = "Rest3_b_d_" + itos(d);
 				model.addConstr(rest3_b <= (0.5 * (D * (D - 1)) + D * T) * vars_d[d], s);
-			}
+			}*/
 
 			// Constraint 4: A depot is active only if it has outgoing arcs
 			// Ensures vars_d[d] = 1 => at least one outgoing arc from depot d,
@@ -721,14 +705,16 @@ namespace std
 			// Loop excludes the base depot.
 			for (int d = 0; d < D - 1; d++) // excludes the base depot
 			{
-				GRBLinExpr sum_out = 0;
+				GRBLinExpr sum_in = 0;
 				for (int j = 0; j < N; j++)
 				{
 					if (j != d)
-						sum_out += vars_x[d][j];
+					{
+						sum_in += vars_x[j][d];
+					}
 				}
-				model.addConstr(vars_d[d] <= sum_out, "Rest4_link_lb_" + itos(d));
-				model.addConstr(sum_out <= (N - 1) * vars_d[d], "Rest4_link_ub_" + itos(d));
+				model.addConstr(vars_d[d] <= sum_in, "Rest4_link_lb_" + itos(d));
+				model.addConstr(sum_in <= (N - 1) * vars_d[d], "Rest4_link_ub_" + itos(d));
 			}
 
 			// Constraint 5: [SUM x_id0 == 1]
@@ -1022,7 +1008,7 @@ namespace std
 			model.set(GRB_DoubleParam_MIPGap, 0.01);
 
 			// Create callback object for subtour elimination with warm start flag = 1
-			subtourelim cb = subtourelim(vars_x, N, vars_d, D - 1, 1);
+			subtourelim cb = subtourelim(vars_x, N, vars_d, D - 1);
 			model.setCallback(&cb);
 
 			// Start measuring optimization time
@@ -1850,10 +1836,10 @@ namespace std
 		set<int> globalDepots;
 		vector<int> depots;
 		int targets_num = 0;
-		;
 
 		for (uint i = 0; i < s->paths.size(); ++i)
 		{
+
 			imp_path = improvePath(s->paths[i]);
 			if (imp_path.pID == -1 || imp_path.pCost < 0 || imp_path.edges.empty())
 				return false;
@@ -3488,7 +3474,7 @@ namespace std
 			// auto itTemp = tempNodes.begin();
 			auto itMap = mapInOut.end();
 			pathCost = 0;
-			maxCost = numeric_limits<double>::min();
+			maxCost = numeric_limits<double>::lowest();
 			// get map of all nodes that enter and departure from a node;
 			while (it_edges != edge_temp.end())
 			{
@@ -3570,7 +3556,7 @@ namespace std
 		// auto itTemp = tempNodes.begin();
 		auto itMap = mapInOut.end();
 		pathCost = 0;
-		maxCost = numeric_limits<double>::min();
+		maxCost = numeric_limits<double>::lowest();
 		// get map of all nodes that enter and departure from a node;
 		while (it_edges != edge_temp.end())
 		{
@@ -3640,7 +3626,7 @@ namespace std
 		vector<edge> edge_temp = p.edges;
 		auto it_edges = edge_temp.begin();
 		pathCost = 0;
-		maxCost = numeric_limits<double>::min();
+		maxCost = numeric_limits<double>::lowest();
 
 		// 1. Contabiliza entradas e saídas de cada nó e soma o custo
 		while (it_edges != edge_temp.end())
@@ -3649,13 +3635,9 @@ namespace std
 			if (it_edges->node_a == it_edges->node_b)
 				return false;
 
-			// Incrementa contador de saída
-			auto resA = mapInOut.emplace(it_edges->node_a, make_pair(0, 0));
-			resA.first->second.first++;
-
-			// Incrementa contador de entrada
-			auto resB = mapInOut.emplace(it_edges->node_b, make_pair(0, 0));
-			resB.first->second.second++;
+			// Check for duplicate edges
+			mapInOut[it_edges->node_a].first++;
+			mapInOut[it_edges->node_b].second++;
 
 			pathCost += it_edges->cost;
 			if (maxCost < it_edges->cost)

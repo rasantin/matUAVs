@@ -72,6 +72,7 @@ int main(int argc, char **argv) {
 	int cvl_subset_num = input.getMaxCVLSubSet();
 
 	while(exec <= input.getNExec()){
+	//while(exec <= 1){
 
 		output.createOutput(datetime());
 
@@ -95,6 +96,7 @@ int main(int argc, char **argv) {
 			//cout << "Perturbation time:" <<elapsed_seconds <<"segundos" <<endl;
 
 			while(n <= input.getN()){
+			//while(n <= 1){
 				//vnd
 				//s.printSol(s.currentSol);
 				//cout << "Vector of Solutions:" << s.vecSol.size() <<endl;

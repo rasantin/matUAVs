@@ -355,6 +355,7 @@ namespace std
 		}
 
 		bool best_prediction = true;
+
 	};
 
 } /* namespace std */

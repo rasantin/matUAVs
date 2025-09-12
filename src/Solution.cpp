@@ -1369,13 +1369,6 @@ namespace std
 
 		bool found_best_sol = false;
 
-		for (path p : s->paths)
-		{
-			for (int id : p.depots)
-				if (id < 31)
-					cerr << "#1 Erro id em na função swap!\n";
-		}
-
 		// copy current solution groups operators: nodesSets and coverageSets
 		copyNSets();
 
@@ -1551,14 +1544,6 @@ namespace std
 					solTemp.paths[g1] = pathG1;
 					solTemp.paths[g2] = pathG2;
 
-					for (int id : pathG1.depots)
-						if (id < 31)
-							cerr << "#2 Erro id em na função swap!\n";
-
-					for (int id : pathG2.depots)
-						if (id < 31)
-							cerr << "#3 Erro id em na função swap!\n";
-
 					// changed the paths:update tempSol cost and depotsNum;
 					updateSolCosts(&solTemp);
 					// se o maior custo de shiftPath  for menor que o maior custo da solução corrente
@@ -1682,10 +1667,19 @@ namespace std
 			// obter o índice da linha em g1
 			line = getCVLIndex(g1Index, iLine);
 
+			// teste para debug
+			if (!PathRestrictions(solTemp.paths[g1Index]))
+				continue;
+
 			pathG1 = removeCL(solTemp.paths[g1Index], line);
 
 			if (pathG1.pCost <= 0)
 				continue;
+
+			if (!PathRestrictions(pathG1))
+			{
+				continue;
+			}
 
 			// para todos os outro grupos da solução
 			for (int g2Index : graphsIndex)
@@ -1696,6 +1690,11 @@ namespace std
 				if (g1Index != g2Index)
 				{ // com exceção de g1Index
 
+					// teste para debug
+					if (!PathRestrictions(solTemp.paths[g2Index]))
+					{
+						continue;
+					}
 					start = std::chrono::system_clock::now();
 					path_op = bestInsertionCL(solTemp.paths[g2Index], line);
 					end = std::chrono::system_clock::now();
@@ -1704,6 +1703,11 @@ namespace std
 
 					if (pathG2.pCost <= 1)
 						continue;
+
+					if (!PathRestrictions(pathG2))
+					{
+						continue;
+					}
 
 					double maxCost = max(pathG2.pCost, pathG1.pCost);
 					pIndex.g1Index = g1Index;
@@ -1761,6 +1765,11 @@ namespace std
 						continue;
 					}
 
+					if (!PathRestrictions(pathG2))
+					{
+						continue;
+					}
+
 					solTemp.paths[g2] = pathG2;
 
 					if (isDefinitelyGreaterThan(solTemp.paths[g1].pCost, solTemp.paths[g2].pCost, 1.0))
@@ -1771,6 +1780,12 @@ namespace std
 						{
 							solTemp = *s;
 							// restoreNSets();
+							continue;
+						}
+
+						if (!PathRestrictions(pathG1))
+						{
+							solTemp = *s;
 							continue;
 						}
 
@@ -2215,8 +2230,8 @@ namespace std
 		p.depots.erase(depot_to_close);
 
 		//-------------------------------------------teste temporário da saída---------------------------------------
-		// if(!PathRestrictions(p))
-		// cout << "problema restrições closedepot link to next" <<endl;
+		if (!PathRestrictions(p))
+			cout << "problema restrições closedepot link to next" << endl;
 		//-------------------------------------------------------------------------------------------------
 
 		return p;
@@ -2378,7 +2393,6 @@ namespace std
 		edge e;
 		int node_a_id;
 
-		// auto it_fuel = p.fuelOnTarget.begin();
 		double fuel_available_node_a;
 		double fuel_available_node_b;
 
@@ -2525,7 +2539,6 @@ namespace std
 			// realizar a alteração da rota desviando para outro depósito.
 			if (it_edge->node_b == node_id)
 			{
-
 				// se o nó anterior for o depot de desvio, a substituição de node_b pelo mesmo nó
 				// irá gerar um loop. remover e voltar uma posição;
 				if (it_edge->node_a == node_id)
@@ -2602,8 +2615,8 @@ namespace std
 		// p.depots = depots;
 
 		//----------------------------teste temporário da saída-----------------------------------------
-		// if(!PathRestrictions(p))
-		// cout << "problema capacidade do robô removedepot" <<endl;
+		if (!PathRestrictions(p))
+			cout << "problema capacidade do robô removedepot" << endl;
 		//-------------------------------------------------------------------------------------------
 
 		return p;
@@ -2621,9 +2634,6 @@ namespace std
 
 		for (path p : s->paths)
 		{
-			for (int id : p.depots)
-				if (id < 31)
-					cerr << "Problema id depot!\n";
 			s->depots.insert(p.depots.begin(), p.depots.end()); // obter todos os depósito abertos
 			sCost += p.pCost;
 			sTargetsNum += p.fuelOnTarget.size();
@@ -3198,49 +3208,18 @@ namespace std
 		// número da quantidade de depots da solução inicial + 50% //passar como parâmetro
 		// ajustar a execução das duas perturbações.
 
-		for (path p : s->paths)
-		{
-			for (int id : p.depots)
-				if (id < 31)
-					cerr << "#1 Erro id em na função perturbation!\n";
-		}
-
 		if (choose == 0)
 		{
 			pshift(s);
-			for (path p : s->paths)
-			{
-				for (int id : p.depots)
-					if (id < 31)
-						cerr << "#2 Erro id em na função perturbation!\n";
-			}
 		}
 		else if (choose == 1)
 		{
 			openRandomDepot(s);
-			for (path p : s->paths)
-			{
-				for (int id : p.depots)
-					if (id < 31)
-						cerr << "#3 Erro id em na função perturbation!\n";
-			}
 		}
 		else if (choose == 2)
 		{
 			openRandomDepot(s);
-			for (path p : s->paths)
-			{
-				for (int id : p.depots)
-					if (id < 31)
-						cerr << "# 4Erro id em na função perturbation!\n";
-			}
 			pshift(s);
-			for (path p : s->paths)
-			{
-				for (int id : p.depots)
-					if (id < 31)
-						cerr << "#5 Erro id em na função perturbation!\n";
-			}
 		}
 	}
 
@@ -3327,11 +3306,23 @@ namespace std
 		double fuel_required = 0.0;
 		double robot_capacity = 0.0;
 		double max_fuel_required = 0.0;
+		double fuel_on_robot = 0.0;
 
 		// obtém a base do robô
 		int baseID = input.getRobotBaseId(p.robotID);
 
 		robot_capacity = input.getRobotFuel(p.robotID);
+
+		if (p.edges.front().node_a == baseID)
+			fuel_on_robot = robot_capacity;
+		else
+		{
+			auto it = p.fuelOnTarget.find(p.edges.front().node_a);
+			if (it != p.fuelOnTarget.end())
+				fuel_on_robot = it->second;
+			else
+				fuel_on_robot = robot_capacity;
+		}
 
 		for (const edge &e : p.edges)
 		{							 // percorrer todas as arestas
@@ -3344,8 +3335,23 @@ namespace std
 					max_fuel_required = fuel_required;
 
 				fuel_required = 0.0;
+				// Refueling: robot gets full capacity at depot or base
+				fuel_on_robot = robot_capacity;
+			}
+			else
+			{
+				fuel_on_robot -= e.time;
+				auto it = p.fuelOnTarget.find(e.node_b);
+				if (it != p.fuelOnTarget.end())
+				{
+					const double tolerance = 1;
+
+					if (fabs(fuel_on_robot - it->second) > tolerance)
+						return false; // fuel at target does not match
+				}
 			}
 		}
+
 		// Verificar o último trecho caso ele não termine em depot
 		if (fuel_required > max_fuel_required)
 			max_fuel_required = fuel_required;
@@ -3362,16 +3368,17 @@ namespace std
 	// verificar o custo do caminho para o novo robô, caso não tenha capacidade de percorrer o caminho retorna o custo negativo (-1)
 	Solution::path Solution::RobotCostInPath(path p)
 	{
-		double fuel_required, robot_capacity, pcost;
+		double fuel_required, robot_capacity, pcost, fuel_on_robot;
 		double max_fuel_required = numeric_limits<double>::min();
 
 		// obtém a base do robô
 		int baseID = input.getRobotBaseId(p.robotID);
-		double fuel_on_a = 0.0;
+		double fuel_on_b = 0.0;
 
 		robot_capacity = input.getRobotFuel(p.robotID);
 		fuel_required = 0;
 		pcost = 0;
+		fuel_on_robot = robot_capacity;
 
 		// atualizar o custo de cada aresta para o custo do novo robô
 		for (auto it_edges = p.edges.begin(); it_edges != p.edges.end(); ++it_edges)
@@ -3382,17 +3389,17 @@ namespace std
 			auto it_fuel_a = p.fuelOnTarget.find(it_edges->node_a);
 			auto it_fuel_b = p.fuelOnTarget.find(it_edges->node_b);
 
-			// se houver a entrada do target
-			if (it_fuel_a != p.fuelOnTarget.end())
-				fuel_on_a = it_fuel_a->second;
-			else
-				fuel_on_a = robot_capacity;
-
-			if (it_fuel_b != p.fuelOnTarget.end())
-				it_fuel_b->second = fuel_on_a - it_edges->time;
-
 			fuel_required += it_edges->time;
 			pcost += it_edges->cost;
+
+			// se houver a entrada no depot
+			if (it_fuel_a == p.fuelOnTarget.end())
+				fuel_on_robot = robot_capacity;
+
+			fuel_on_robot -= it_edges->time;
+
+			if (it_fuel_b != p.fuelOnTarget.end())
+				it_fuel_b->second = fuel_on_robot;
 
 			// verificar se o combustível necessário entre depots incluindo a base
 			if (p.depots.find(it_edges->node_b) != p.depots.end() || it_edges->node_b == baseID)
@@ -3414,6 +3421,9 @@ namespace std
 		// o robô tem capacidade de percorrer o mesmo caminho do robô anterior.
 		// atribuir o custo do caminho para o novo robô;
 		p.pCost = pcost;
+
+		if (!PathRestrictions(p))
+			cout << "solução não validada:Best Path" << endl;
 
 		return p;
 	}
@@ -3696,9 +3706,95 @@ namespace std
 	// Remover uma "linha de cobertura" (CL - Coverage Line) de um caminho e recalcular todos os parâmetros afetados.
 	Solution::path Solution::removeCL(path p, int cl)
 	{
+
+		// injeção de erro para teste
+
+		/*edge e;
+		vector<edge> temp_edges;
+		e.node_a = 0;
+		e.node_b = 37;
+		e.time = 550.39;
+		e.cost = 1651.17;
+		temp_edges.push_back(e);
+
+		e.node_a = 37;
+		e.node_b = 7;
+		e.time = 0;
+		e.cost = 0;
+		temp_edges.push_back(e);
+
+		e.node_a = 7;
+		e.node_b = 8;
+		e.time = 952.16;
+		e.cost = 2856.48;
+		temp_edges.push_back(e);
+
+		e.node_a = 8;
+		e.node_b = 10;
+		e.time = 45.51;
+		e.cost = 136.55;
+		temp_edges.push_back(e);
+
+		e.node_a = 10;
+		e.node_b = 9;
+		e.time = 737.27;
+		e.cost = 2211.82;
+		temp_edges.push_back(e);
+
+		e.node_a = 9;
+		e.node_b = 39;
+		e.time = 0;
+		e.cost = 0;
+		temp_edges.push_back(e);
+
+		e.node_a = 39;
+		e.node_b = 6;
+		e.time = 507.59;
+		e.cost = 1522.77;
+		temp_edges.push_back(e);
+
+		e.node_a = 6;
+		e.node_b = 5;
+		e.time = 719.45;
+		e.cost = 2158.36;
+		temp_edges.push_back(e);
+
+		e.node_a = 5;
+		e.node_b = 0;
+		e.time = 520.53;
+		e.cost = 1561.61;
+		temp_edges.push_back(e);
+
+		p.edges = temp_edges;
+
+		p.fuelOnTarget.clear();
+		p.fuelOnTarget.emplace(5, 572.95);
+		p.fuelOnTarget.emplace(6, 1292.40);
+		p.fuelOnTarget.emplace(7, 1800);
+		p.fuelOnTarget.emplace(8, 847.83);
+		p.fuelOnTarget.emplace(9, 65.04);
+		p.fuelOnTarget.emplace(10, 802.31);
+
+		p.robotID = 2;
+		p.pID = 0;
+		p.pCost = 9954.34;
+
+		p.depots.clear();
+		p.depots.insert(37);
+		p.depots.insert(39);
+
+		p.depotsNum = p.depots.size() + 1;
+		p.targetsNum = p.fuelOnTarget.size();
+
+		cl = 7;*/
+
 		double pcost = 0;
 		int t_1 = cl;
 		int t_2 = cl + 1;
+
+		// Verifica se o robô tem capacidade para o caminho antes de modificar o trajeto
+		if (!robotCapacity_val(p))
+			p.pCost = -1;
 
 		list<edge> edges(p.edges.begin(), p.edges.end());
 
@@ -3790,13 +3886,29 @@ namespace std
 		fuel_on_node_a = (it_fuel != p.fuelOnTarget.end()) ? it_fuel->second : robot_capacity;
 		fuel_on_node_b = fuel_on_node_a - edge_a->time;
 
+		if (fuel_on_node_b < 0)
+		{
+			p.pCost = -1;
+			return p;
+		}
+
 		// Atualizar combustível no novo destino (node_b da nova edge)
 		if ((it_fuel = p.fuelOnTarget.find(edge_a->node_b)) != p.fuelOnTarget.end())
+		{
 			it_fuel->second = fuel_on_node_b;
+		}
+		else
+		{
+			fuel_on_node_b = robot_capacity;
+		}
 
 		// Remover targets da LC
 		p.fuelOnTarget.erase(edge_b->node_a);
 		p.fuelOnTarget.erase(edge_b->node_b);
+
+		// Remover edge_b e edge_c
+		edges.erase(edge_b);
+		edges.erase(edge_c);
 
 		// Atualizar combustíveis após edge_a até próximo depósito (ou fim)
 		it_edge = ++edge_a; // começa da próxima após edge_a
@@ -3818,10 +3930,6 @@ namespace std
 			}
 			++it_edge;
 		}
-
-		// Remover edge_b e edge_c
-		edges.erase(edge_b);
-		edges.erase(edge_c);
 
 		for (const auto &e : edges)
 			pcost += e.cost;
@@ -3892,17 +4000,105 @@ namespace std
 		set<int> depots;
 		path path_temp;
 
+		// injeção de erro para teste
+
+		/*edge e;
+		vector<edge> temp_edges;
+		e.node_a = 0;
+		e.node_b = 33;
+		e.time = 227.65;
+		e.cost = 682.90;
+		temp_edges.push_back(e);
+
+		e.node_a = 33;
+		e.node_b = 32;
+		e.time = 922.07;
+		e.cost = 2766.21;
+		temp_edges.push_back(e);
+
+		e.node_a = 32;
+		e.node_b = 24;
+		e.time = 299.12;
+		e.cost = 897.30;
+		temp_edges.push_back(e);
+
+		e.node_a = 24;
+		e.node_b = 23;
+		e.time = 915.00;
+		e.cost = 2745.00;
+		temp_edges.push_back(e);
+
+		e.node_a = 23;
+		e.node_b = 53;
+		e.time = 0;
+		e.cost = 0;
+		temp_edges.push_back(e);
+
+		e.node_a = 53;
+		e.node_b = 56;
+		e.time = 689.42;
+		e.cost =2068.27;
+		temp_edges.push_back(e);
+
+		e.node_a = 56;
+		e.node_b = 26;
+		e.time = 0;
+		e.cost = 0;
+		temp_edges.push_back(e);
+
+		e.node_a = 26;
+		e.node_b = 25;
+		e.time = 776.098;
+		e.cost = 2328.29;
+		temp_edges.push_back(e);
+
+		e.node_a = 25;
+		e.node_b = 55;
+		e.time = 0;
+		e.cost = 0;
+		temp_edges.push_back(e);
+
+		e.node_a = 55;
+		e.node_b = 0;
+		e.time = 197.42;
+		e.cost = 592.27;
+		temp_edges.push_back(e);
+
+		p.edges = temp_edges;
+
+		p.fuelOnTarget.clear();
+		p.fuelOnTarget.emplace(0, 1602.57);
+		p.fuelOnTarget.emplace(23, 585.87);
+		p.fuelOnTarget.emplace(24, 1500.87);
+		p.fuelOnTarget.emplace(25, 1023.90);
+		p.fuelOnTarget.emplace(26, 1800.00);
+
+		p.robotID = 3;
+		p.pID = 1;
+		p.pCost = 12080.33;
+
+		p.depots.clear();
+		p.depots.insert(32);
+		p.depots.insert(33);
+		p.depots.insert(43);
+		p.depots.insert(47);
+		p.depots.insert(48);
+		p.depots.insert(53);
+		p.depots.insert(55);
+		p.depots.insert(56);
+
+		p.depotsNum = p.depots.size() + 1;
+		p.targetsNum = p.fuelOnTarget.size();
+
+		out = 3;
+		new_cl = 9;*/
+
 		// obter a lista de arestas
 		edges_list.insert(edges_list.begin(), p.edges.begin(), p.edges.end());
 
 		// obter o novo caminho do nó de saída, ligando a nova linha de cobertura e a próxima linha de cobertura do nó de saída.
 		// o reabastecimento é ajustado caso necessário.
 		path_temp = link_out_cl_in(p, out, new_cl);
-
-		for (int id : path_temp.depots)
-
-			if (id < 31)
-				cerr << "#1 Problema id new insert!\n";
 
 		if (path_temp.pCost <= 0)
 		{
@@ -3961,7 +4157,9 @@ namespace std
 		p.edges.insert(p.edges.begin(), edges_list.begin(), edges_list.end());
 
 		// atualizar os combustíveis nos targets
-		auto p_fuel = p.fuelOnTarget.begin();
+		p.fuelOnTarget.clear();
+		p.fuelOnTarget = path_temp.fuelOnTarget;
+		/*auto p_fuel = p.fuelOnTarget.begin();
 		for (auto path_temp_fuel : path_temp.fuelOnTarget)
 		{
 			p_fuel = p.fuelOnTarget.find(path_temp_fuel.first);
@@ -3969,10 +4167,10 @@ namespace std
 				p_fuel->second = path_temp_fuel.second;
 			else // caso contrário inserir o novo target
 				p.fuelOnTarget.emplace(path_temp_fuel.first, path_temp_fuel.second);
-		}
+		}*/
 
 		// atualizar os depósitos e o custo em cada target
-		p_fuel = p.fuelOnTarget.begin();
+		auto p_fuel = p.fuelOnTarget.begin();
 		double cost = 0;
 		for (auto e : p.edges)
 		{
@@ -3980,8 +4178,6 @@ namespace std
 			p_fuel = p.fuelOnTarget.find(e.node_a);
 			if (p_fuel == p.fuelOnTarget.end() && e.node_a != input.getRobotBaseId(p.robotID))
 			{
-				if (e.node_a < 31)
-					cerr << "Problema: ID \n";
 				depots.insert(e.node_a);
 			}
 		}
@@ -3992,10 +4188,6 @@ namespace std
 		p.depotsNum = p.depots.size() + 1;
 		p.targetsNum = p.fuelOnTarget.size();
 		p.pCost = cost;
-
-		for (int id : p.depots)
-			if (id < 31)
-				cerr << "1 Erro id em na função perturbation!\n";
 
 		//---------------------------------------------------teste temporário da saída-----------------------
 		if (!PathRestrictions(p))
@@ -4350,6 +4542,9 @@ namespace std
 
 		// atualizar targetNum
 		p.targetsNum = p.fuelOnTarget.size();
+
+		if (!PathRestrictions(p))
+			cout << "solução não validada:Best Path" << endl;
 
 		return p;
 	}
@@ -4730,6 +4925,10 @@ namespace std
 		path_temp.pCost = 0;
 		path_temp.fuelOnTarget.clear();
 
+		// verifica se já existe erro em fuelOnTarget do caminho p
+		if (!robotCapacity_val(p))
+			cout << "Robot Capacity problem\n";
+
 		// obter a direção da linha de cobertura de saída
 		dir_out = getCLDirection(p, out);
 
@@ -4808,14 +5007,14 @@ namespace std
 			new_edges.emplace_back(edge_temp);
 		}
 		auto it_new_edges = new_edges.begin();
-		auto it_fuel = p.fuelOnTarget.begin();
+		auto it_fuel = path_temp.fuelOnTarget.begin();
 		while (!new_edges.empty())
 		{
 
 			fuel_remaining = 0.0;
 
-			it_fuel = p.fuelOnTarget.find(it_new_edges->node_a);
-			if (it_fuel != p.fuelOnTarget.end())
+			it_fuel = path_temp.fuelOnTarget.find(it_new_edges->node_a);
+			if (it_fuel != path_temp.fuelOnTarget.end())
 				fuel_remaining = it_fuel->second;
 
 			fuel_required = it_new_edges->time;
@@ -4836,7 +5035,7 @@ namespace std
 				{
 					// obter o segmento do menor caminho possível lingando node_a e node_b
 					// passando pelos postos.
-					p_segment = GetSPTOverOpenDepots(p, it_new_edges->node_a, it_new_edges->node_b);
+					p_segment = GetSPTOverOpenDepots(path_temp, it_new_edges->node_a, it_new_edges->node_b);
 
 					if (p_segment.edges.empty())
 					{
@@ -4853,11 +5052,11 @@ namespace std
 					// atualizar o vetor de combustível em cada target
 					for (auto fuel_segment : p_segment.fuelOnTarget)
 					{
-						it_fuel = p.fuelOnTarget.find(fuel_segment.first);
-						if (it_fuel != p.fuelOnTarget.end())
+						it_fuel = path_temp.fuelOnTarget.find(fuel_segment.first);
+						if (it_fuel != path_temp.fuelOnTarget.end())
 							it_fuel->second = fuel_segment.second;
 						else
-							p.fuelOnTarget.emplace(fuel_segment.first, fuel_segment.second);
+							path_temp.fuelOnTarget.emplace(fuel_segment.first, fuel_segment.second);
 					}
 				}
 				else
@@ -4875,7 +5074,7 @@ namespace std
 
 					// edge_list.back().node_b = input.getDepotIdOnTarget(it_new_edges->node_a);
 					// obter o segmento o menor caminho possível lingando node_a e node_b
-					p_segment = GetSPTOverOpenDepots(p, edge_list.back().node_a, edge_list.back().node_b);
+					p_segment = GetSPTOverOpenDepots(path_temp, edge_list.back().node_a, edge_list.back().node_b);
 
 					if (p_segment.edges.empty())
 					{
@@ -4893,11 +5092,11 @@ namespace std
 					// atualizar o vetor de combustível em cada target
 					for (auto fuel_segment : p_segment.fuelOnTarget)
 					{
-						it_fuel = p.fuelOnTarget.find(fuel_segment.first);
-						if (it_fuel != p.fuelOnTarget.end())
+						it_fuel = path_temp.fuelOnTarget.find(fuel_segment.first);
+						if (it_fuel != path_temp.fuelOnTarget.end())
 							it_fuel->second = fuel_segment.second;
 						else
-							p.fuelOnTarget.emplace(fuel_segment.first, fuel_segment.second);
+							path_temp.fuelOnTarget.emplace(fuel_segment.first, fuel_segment.second);
 					}
 
 					// inserir a linha de cobertura
@@ -4909,8 +5108,8 @@ namespace std
 					path_temp.pCost += edge_temp.cost;
 
 					// obter o combustível restante no nó de partida node_a.
-					it_fuel = p.fuelOnTarget.find(edge_temp.node_a);
-					if (it_fuel != p.fuelOnTarget.end())
+					it_fuel = path_temp.fuelOnTarget.find(edge_temp.node_a);
+					if (it_fuel != path_temp.fuelOnTarget.end())
 						fuel_remaining = it_fuel->second;
 
 					// combustível necessário para o deslocamento
@@ -4926,11 +5125,11 @@ namespace std
 					}
 
 					// atualizar o combustível em node_b após o deslocamento
-					it_fuel = p.fuelOnTarget.find(edge_temp.node_b);
-					if (it_fuel != p.fuelOnTarget.end()) // se o target já existir em fuelontarget
+					it_fuel = path_temp.fuelOnTarget.find(edge_temp.node_b);
+					if (it_fuel != path_temp.fuelOnTarget.end()) // se o target já existir em fuelontarget
 						it_fuel->second = fuel_on_arrival;
 					else // caso o nó não tenha sido alterado
-						p.fuelOnTarget.emplace(edge_temp.node_b, fuel_on_arrival);
+						path_temp.fuelOnTarget.emplace(edge_temp.node_b, fuel_on_arrival);
 				}
 			}
 			else
@@ -4938,11 +5137,11 @@ namespace std
 
 				if (input.isTarget(it_new_edges->node_b))
 				{
-					it_fuel = p.fuelOnTarget.find(it_new_edges->node_b);
-					if (it_fuel != p.fuelOnTarget.end())
+					it_fuel = path_temp.fuelOnTarget.find(it_new_edges->node_b);
+					if (it_fuel != path_temp.fuelOnTarget.end())
 						it_fuel->second = fuel_on_arrival;
 					else // caso não tenha o target na lista
-						p.fuelOnTarget.emplace(it_new_edges->node_b, fuel_on_arrival);
+						path_temp.fuelOnTarget.emplace(it_new_edges->node_b, fuel_on_arrival);
 				}
 
 				// edge_list.emplace_back(*it_edge);
@@ -4956,7 +5155,7 @@ namespace std
 			//++it_new_edges;
 		}
 
-		path_temp.fuelOnTarget = p.fuelOnTarget;
+		// path_temp.fuelOnTarget = p.fuelOnTarget;
 		path_temp.edges.insert(path_temp.edges.begin(), edge_list.begin(), edge_list.end());
 		path_temp.targetsNum = path_temp.fuelOnTarget.size();
 
@@ -5224,7 +5423,11 @@ namespace std
 	pair<Solution::path, string> Solution::bestInsertionCL(path p, int cl)
 	{
 		// obter as linhas de cobertura de p
-		int nCL = getNumberOfLines(p.pID);
+		// int nCL = getNumberOfLines(p.pID);
+
+		vector<int> cvlID = getOddCVLIndexes(p);
+		int nCL = cvlID.size();
+
 		int pos = 0;
 		path new_path, pathTemp, minPath;
 		double minPCost = numeric_limits<double>::max();
@@ -5237,7 +5440,8 @@ namespace std
 		for (int i = 0; i < nCL; i++)
 		{
 			// position to insert
-			pos = getCVLIndex(p.pID, i);
+			// pos = getCVLIndex(p.pID, i);
+			pos = cvlID[i];
 
 			// new_path = insertCL(p,pos,cl);
 			new_path = new_insert(p, pos, cl);
@@ -5249,12 +5453,21 @@ namespace std
 				continue;
 			}
 
+			// teste para debug
+			if (!PathRestrictions(new_path))
+			{
+				cout << "solução NÃO validada best\n";
+			}
+
 			path_op = EvalOthersOrientationsOnPath(new_path, cl);
 
 			pathTemp = path_op.first;
 
-			// if(!PathRestrictions(pathTemp))
-			// cout <<"Restrição bestInsertionCL" <<endl;
+			// teste para debug
+			if (!PathRestrictions(pathTemp))
+			{
+				cout << "solução NÃO validada best\n";
+			}
 
 			// se o caminho for inviável tentar próxima inserção
 			if (pathTemp.pCost < 0)
@@ -5512,8 +5725,9 @@ namespace std
 		vector<pair<pair<int, int>, pair<double, double>>> walkVector;
 
 		// obter o combustível restante nó de saída da linha de cobertura inserida.
-		if (p.fuelOnTarget.find(cl_node) != p.fuelOnTarget.end())
-			fuel_remaning = p.fuelOnTarget.find(cl_node)->second;
+		auto itFuel = path_temp.fuelOnTarget.find(cl_node);
+		if (itFuel != path_temp.fuelOnTarget.end())
+			fuel_remaning = itFuel->second;
 
 		// inicializar as infos do path_temp.
 		path_temp.pCost = 0;
@@ -5539,15 +5753,14 @@ namespace std
 		edge_list.emplace_back(link_path_to_base);
 
 		// adicinoar o combustível disponível no robô no node pos.
-		auto itFuel = p.fuelOnTarget.find(cl_node);
-		if (itFuel != p.fuelOnTarget.end())
+		itFuel = path_temp.fuelOnTarget.find(cl_node);
+		if (itFuel != path_temp.fuelOnTarget.end())
 			itFuel->second = fuel_remaning;
 
 		// inicializar os ponteiros
 		auto it_list = edge_list.begin();
 		while (it_list != edge_list.end())
 		{
-
 			// se o tempo para percorrer a aresta for maior que a capacidade de combustível
 			if (it_list->time > input.getRobotFuel(p.robotID))
 			{
@@ -5561,8 +5774,9 @@ namespace std
 			fuel_required = it_list->time;
 
 			// se o nó de saída for target, obter o combustível disponível
-			if (p.fuelOnTarget.find(it_list->node_a) != p.fuelOnTarget.end())
-				fuel_on_node = p.fuelOnTarget.find(it_list->node_a)->second;
+			itFuel = path_temp.fuelOnTarget.find(it_list->node_a);
+			if (itFuel != path_temp.fuelOnTarget.end())
+				fuel_on_node = itFuel->second;
 			// caso o nó de saída não seja target, o robô está saindo de algum depot
 			else // verificar se a a capcidade do robô é sufciente
 				fuel_on_node = input.getRobotFuel(path_temp.robotID);
@@ -5580,7 +5794,7 @@ namespace std
 
 					// obter o segmento do menor caminho possível lingando node_a e node_b
 					// passando pelos postos.
-					p_segment = GetSPTOverOpenDepots(p, it_list->node_a, it_list->node_b);
+					p_segment = GetSPTOverOpenDepots(path_temp, it_list->node_a, it_list->node_b);
 
 					if (p_segment.edges.empty())
 					{
@@ -5598,11 +5812,11 @@ namespace std
 					// atualizar o vetor de combustível em cada target
 					for (auto fuel_segment : p_segment.fuelOnTarget)
 					{
-						itFuel = p.fuelOnTarget.find(fuel_segment.first);
-						if (itFuel != p.fuelOnTarget.end())
+						itFuel = path_temp.fuelOnTarget.find(fuel_segment.first);
+						if (itFuel != path_temp.fuelOnTarget.end())
 							itFuel->second = fuel_segment.second;
 						else
-							p.fuelOnTarget.emplace(fuel_segment.first, fuel_segment.second);
+							path_temp.fuelOnTarget.emplace(fuel_segment.first, fuel_segment.second);
 					}
 
 					// a operação de inserção já posiciona o it_list no próximo elemento a ser analisado
@@ -5619,7 +5833,7 @@ namespace std
 					// remover o valor inserido no custo
 					path_temp.pCost -= prev_edge->cost; // remover o custo antido da variável de custo
 
-					p_segment = GetSPTOverOpenDepots(p, prev_edge->node_a, prev_edge->node_b);
+					p_segment = GetSPTOverOpenDepots(path_temp, prev_edge->node_a, prev_edge->node_b);
 
 					if (p_segment.edges.empty())
 					{
@@ -5636,20 +5850,20 @@ namespace std
 					// atualizar o vetor de combustível em cada target
 					for (auto fuel_segment : p_segment.fuelOnTarget)
 					{
-						itFuel = p.fuelOnTarget.find(fuel_segment.first);
-						if (itFuel != p.fuelOnTarget.end())
+						itFuel = path_temp.fuelOnTarget.find(fuel_segment.first);
+						if (itFuel != path_temp.fuelOnTarget.end())
 							itFuel->second = fuel_segment.second;
 						else
-							p.fuelOnTarget.emplace(fuel_segment.first, fuel_segment.second);
+							path_temp.fuelOnTarget.emplace(fuel_segment.first, fuel_segment.second);
 					}
 
 					// atualizar o combustível nos targets da LC
-					itFuel = p.fuelOnTarget.find(it_list->node_a);
-					if (itFuel != p.fuelOnTarget.end())
+					itFuel = path_temp.fuelOnTarget.find(it_list->node_a);
+					if (itFuel != path_temp.fuelOnTarget.end())
 						fuel_remaning = itFuel->second;
 
-					itFuel = p.fuelOnTarget.find(it_list->node_b);
-					if (itFuel != p.fuelOnTarget.end())
+					itFuel = path_temp.fuelOnTarget.find(it_list->node_b);
+					if (itFuel != path_temp.fuelOnTarget.end())
 					{
 						fuel_remaning = fuel_remaning - fuel_required;
 						if (isDefinitelyLessThan(fuel_remaning, 0.0))
@@ -5667,8 +5881,8 @@ namespace std
 			// caso o combustível seja suficiente, atualizar o combustível disponivel após percorrer a aresta.
 			else
 			{
-				auto itFuel = p.fuelOnTarget.find(it_list->node_b);
-				if (itFuel != p.fuelOnTarget.end())
+				auto itFuel = path_temp.fuelOnTarget.find(it_list->node_b);
+				if (itFuel != path_temp.fuelOnTarget.end())
 					itFuel->second = fuel_remaning;
 				// somar o custo da aresta na variável de custo total
 				path_temp.pCost += it_list->cost;
@@ -5677,14 +5891,18 @@ namespace std
 				++it_list;
 		}
 
-		path_temp.fuelOnTarget = p.fuelOnTarget;
-		// adiciona a base na contagem de depot;
+		// path_temp.fuelOnTarget = p.fuelOnTarget;
+		//  adiciona a base na contagem de depot;
 
 		// inserir a quantidade de targets.
 		path_temp.targetsNum = path_temp.fuelOnTarget.size();
 
 		// insere o caminho armazenado na lista em path_temp.
 		path_temp.edges.insert(path_temp.edges.begin(), edge_list.begin(), edge_list.end());
+
+		// debug: teste para verificar se o caminho é válido
+		if (!PathRestrictions(path_temp))
+			cout << "solução não validada " << endl;
 
 		return path_temp;
 	}
@@ -5726,6 +5944,12 @@ namespace std
 			path_t.pCost = -1;
 			return path_t;
 		}
+		// debug: verificação se existe erro no caminho antes de prosseguir
+		if (!robotCapacity_val(path_t))
+		{
+			cout << "capacidade violada adjsPath" << endl;
+		}
+
 		edge_list.insert(edge_list.begin(), path_costs.begin(), path_costs.end());
 
 		// limpar a informação dos combustíveis em cada nó.
@@ -5736,6 +5960,9 @@ namespace std
 
 		// limpar a rota em path_t;
 		path_t.edges.clear();
+
+		// limpar indicativo de combustível em cada target.
+		path_t.fuelOnTarget.clear();
 
 		// link base to first CL
 		link_base_to_path.node_a = baseID;
@@ -5749,9 +5976,10 @@ namespace std
 		fuel_remaning = input.getRobotFuel(path_t.robotID) - link_base_to_path.time;
 
 		// atualizar o map com a informação do combustível disponível no target de início da rota.
-		p.fuelOnTarget.find(link_base_to_path.node_b)->second = fuel_remaning;
+		// p.fuelOnTarget.find(link_base_to_path.node_b)->second = fuel_remaning;
+		path_t.fuelOnTarget.emplace(link_base_to_path.node_b, fuel_remaning);
 
-		// link last edg to base
+		// link last edge to base
 		link_path_to_base.node_a = path_costs.back().node_b;
 		link_path_to_base.node_b = input.getRobotBaseId(path_t.robotID);
 		link_path_to_base.time = getCostOnGraph(path_t.robotID, link_path_to_base.node_a, link_path_to_base.node_b);
@@ -5759,11 +5987,12 @@ namespace std
 		// inserir no fim
 		edge_list.emplace_back(link_path_to_base);
 
-		// caso o robô não tenha capacidade de atingir o target, retornar o vetor vazio.
+		// caso o robô não tenha capacidade de sair da base e atingir o target, retornar o vetor vazio.
 		if (fuel_remaning < 0)
 		{
 			path_t.pCost = -1;
 			path_t.edges.clear();
+			path_t.fuelOnTarget.clear();
 			return path_t;
 		}
 
@@ -5785,14 +6014,15 @@ namespace std
 				path_t.pCost = -1;
 				// retornar caminho vazio;
 				path_t.edges.clear();
+				path_t.fuelOnTarget.clear();
 				return path_t;
 			}
 			// obter o combustível requerido para percorrer a aresta
 			fuel_required = it_list->time;
 
 			// se o nó de saída for target, obter o combustível disponível
-			auto itFuel = p.fuelOnTarget.find(it_list->node_a);
-			if (itFuel != p.fuelOnTarget.end())
+			auto itFuel = path_t.fuelOnTarget.find(it_list->node_a);
+			if (itFuel != path_t.fuelOnTarget.end())
 				fuel_on_node = itFuel->second;
 			// caso o nó de saída não seja target, o robô está saindo de algum depot
 			else // verificar se a a capcidade do robô é sufciente
@@ -5810,11 +6040,13 @@ namespace std
 				{
 					// obter o segmento do menor caminho possível lingando node_a e node_b
 					// passando pelos postos.
-					p_segment = GetSPTOverOpenDepots(p, it_list->node_a, it_list->node_b);
+					p_segment = GetSPTOverOpenDepots(path_t, it_list->node_a, it_list->node_b);
 
 					if (p_segment.edges.empty())
 					{
 						path_t.pCost = -1;
+						path_t.edges.clear();
+						path_t.fuelOnTarget.clear();
 						return path_t;
 					}
 
@@ -5828,11 +6060,11 @@ namespace std
 					// atualizar o vetor de combustível em cada target
 					for (auto fuel_segment : p_segment.fuelOnTarget)
 					{
-						itFuel = p.fuelOnTarget.find(fuel_segment.first);
-						if (itFuel != p.fuelOnTarget.end())
+						itFuel = path_t.fuelOnTarget.find(fuel_segment.first);
+						if (itFuel != path_t.fuelOnTarget.end())
 							itFuel->second = fuel_segment.second;
 						else
-							p.fuelOnTarget.emplace(fuel_segment.first, fuel_segment.second);
+							path_t.fuelOnTarget.emplace(fuel_segment.first, fuel_segment.second);
 					}
 
 					// a operação de inserção posiciona o iterator na próxima aresta, não precisamor movê-lo
@@ -5847,11 +6079,13 @@ namespace std
 					it_list_temp--;
 
 					// obter a menor rota passando por depots
-					p_segment = GetSPTOverOpenDepots(p, it_list_temp->node_a, it_list_temp->node_b);
+					p_segment = GetSPTOverOpenDepots(path_t, it_list_temp->node_a, it_list_temp->node_b);
 
 					if (p_segment.edges.empty())
 					{
 						path_t.pCost = -1;
+						path_t.edges.clear();
+						path_t.fuelOnTarget.clear();
 						return path_t;
 					}
 
@@ -5870,22 +6104,24 @@ namespace std
 					// atualizar o vetor de combustível em cada target dado os valores do segmento
 					for (auto fuel_segment : p_segment.fuelOnTarget)
 					{
-						itFuel = p.fuelOnTarget.find(fuel_segment.first);
-						if (itFuel != p.fuelOnTarget.end())
+						itFuel = path_t.fuelOnTarget.find(fuel_segment.first);
+						if (itFuel != path_t.fuelOnTarget.end())
 							itFuel->second = fuel_segment.second;
 						else
-							p.fuelOnTarget.emplace(fuel_segment.first, fuel_segment.second);
+							path_t.fuelOnTarget.emplace(fuel_segment.first, fuel_segment.second);
 					}
 
 					// atualizar o combustível nos targets da LC
-					itFuel = p.fuelOnTarget.find(it_list->node_a);
-					if (itFuel != p.fuelOnTarget.end())
+					itFuel = path_t.fuelOnTarget.find(it_list->node_a);
+					if (itFuel != path_t.fuelOnTarget.end())
 						fuel_remaning = itFuel->second;
 
 					// atualizar o combustível dispoível no segundo target da lc
-					itFuel = p.fuelOnTarget.find(it_list->node_b);
-					if (itFuel != p.fuelOnTarget.end())
+					itFuel = path_t.fuelOnTarget.find(it_list->node_b);
+					if (itFuel != path_t.fuelOnTarget.end())
 						itFuel->second = fuel_remaning - fuel_required;
+					else
+						path_t.fuelOnTarget.emplace(it_list->node_b, fuel_remaning - fuel_required);
 
 					// adicionar o custo da linha e cobertura
 					path_t.pCost += it_list->cost;
@@ -5894,16 +6130,17 @@ namespace std
 			// caso o combustível seja suficiente, atualizar o combustível disponivel após percorrer a aresta.
 			else
 			{
-				itFuel = p.fuelOnTarget.find(it_list->node_b);
-				if (itFuel != p.fuelOnTarget.end())
+				itFuel = path_t.fuelOnTarget.find(it_list->node_b);
+				if (itFuel != path_t.fuelOnTarget.end())
 					itFuel->second = fuel_remaning;
+				else
+					path_t.fuelOnTarget.emplace(it_list->node_b, fuel_remaning);
 				// somar o custo da aresta na variável de custo total
 				path_t.pCost += it_list->cost;
 			}
 			if (it_list != edge_list.end())
 				++it_list;
 		}
-		path_t.fuelOnTarget = p.fuelOnTarget;
 
 		// insere o caminho armazenado na lista em path_t.
 		path_t.edges.insert(path_t.edges.begin(), edge_list.begin(), edge_list.end());
@@ -7243,6 +7480,9 @@ namespace std
 	{
 		map<int, int> map_depots_on_targets;
 
+		if (!PathRestrictions(*p))
+			cout << "solução não validada" << endl;
+
 		// Obter os depots associados aos targets usados no caminho
 		for (auto &e : p->fuelOnTarget)
 			map_depots_on_targets.emplace(input.getDepotIdOnTarget(e.first), e.first);
@@ -7318,21 +7558,24 @@ namespace std
 					it_edges->time = getCostOnGraph(robot_id, it_edges->node_a, it_edges->node_b);
 					it_edges->cost = it_edges->time + input.getRobotProp(robot_id) * it_edges->time;
 
-					if (new_edge.node_b < 31)
-						cerr << "openRDepotOnTargetPath ... problema id \n";
-
 					p->depots.insert(new_edge.node_b);
 					p->depotsNum++;
 
 					fuel_remaining = robot_capacity;
 					++it_edge_adjfuel;
-
+			
 					while (it_edge_adjfuel != ledges.end() && p->depots.find(it_edge_adjfuel->node_b) == p->depots.end())
 					{
+						auto itPFuel = p->fuelOnTarget.find(it_edge_adjfuel->node_b);
+						if (itPFuel == p->fuelOnTarget.end())
+							break;
+		
 						fuel_required = it_edge_adjfuel->time;
 						fuel_remaining -= fuel_required;
-						p->fuelOnTarget[it_edge_adjfuel->node_b] = fuel_remaining;
+						itPFuel->second = fuel_remaining;
+						
 						++it_edge_adjfuel;
+			
 					}
 
 					processed_targets.insert(target);
@@ -7363,12 +7606,22 @@ namespace std
 					fuel_remaining = robot_capacity;
 					++it_edge_adjfuel;
 
+
 					while (it_edge_adjfuel != ledges.end() && p->depots.find(it_edge_adjfuel->node_b) == p->depots.end())
 					{
+						
+						auto itPFuel = p->fuelOnTarget.find(it_edge_adjfuel->node_b);
+						if (itPFuel == p->fuelOnTarget.end())
+							break;
+				
+
 						fuel_required = it_edge_adjfuel->time;
 						fuel_remaining -= fuel_required;
-						p->fuelOnTarget[it_edge_adjfuel->node_b] = fuel_remaining;
+						itPFuel->second = fuel_remaining;
+
+
 						++it_edge_adjfuel;
+
 					}
 
 					processed_targets.insert(target);
@@ -7384,6 +7637,8 @@ namespace std
 		// Atualiza os depots associados ao path
 		vector<int> depots(p->depots.begin(), p->depots.end());
 		UpdateDepots(p->pID, depots);
+		if (!PathRestrictions(*p))
+			cout << "solução não validada" << endl;
 	}
 
 	void Solution::openRandomDepot(solution *s)
@@ -7401,7 +7656,11 @@ namespace std
 			path *p = &s->paths[i];
 			pcost = 0;
 
+			if (!PathRestrictions(*p))
+				cout << "solução não validada" << endl;
+
 			OpenRandomDepotsOnTargetsPath(p);
+
 			updateSolCosts(s);
 
 			// obter os targets iniciais e finais que conectam as linhas de cobertura
@@ -7630,7 +7889,6 @@ namespace std
 								// altera a aresta do caminho, desviando para o posto localizado em node_b
 								it_edge_temp->node_b = e.node_a;
 								it_edge_temp->time = getCostOnGraph(p->robotID, it_edge_temp->node_a, it_edge_temp->node_b);
-								;
 								it_edge_temp->cost = it_edge_temp->time + (it_edge_temp->time * input.getRobotProp(p->robotID));
 
 								// adicionar o tempo de deslocamento dessa arestra
@@ -7690,6 +7948,9 @@ namespace std
 					p->depotsNum = p->depots.size() + 1;
 
 					p->pCost = pcost;
+
+					if (!PathRestrictions(*p))
+						cout << "solução não validada" << endl;
 
 					//-----teste temporário da saída-------------------------------------------------------
 
@@ -7815,6 +8076,13 @@ namespace std
 							{
 								UpdateDepots(i, depots);
 							}
+
+							// teste debug
+							if (!PathRestrictions(pathG1))
+								cout << "solução não validada pshift 1 pathG1" << endl;
+
+							if (!PathRestrictions(pathG2))
+								cout << "solução não validada pshift 2 pathG2" << endl;
 
 							//-------------------------------- Testes saída ----------------------------------
 
@@ -8236,6 +8504,24 @@ namespace std
 			return true;
 		}
 		return false;
+	}
+
+	/**
+	 * @brief Returns the indexes of coverage lines (CVL) in the path that are odd.
+	 * @param p The path to inspect.
+	 * @return A vector containing the odd CVL indexes found in p.fuelOnTarget.
+	 */
+	vector<int> Solution::getOddCVLIndexes(const path &p)
+	{
+		vector<int> odd_indexes;
+		for (const auto &[index, fuel] : p.fuelOnTarget)
+		{
+			if (index % 2 != 0)
+			{
+				odd_indexes.push_back(index);
+			}
+		}
+		return odd_indexes;
 	}
 
 } /* namespace std */

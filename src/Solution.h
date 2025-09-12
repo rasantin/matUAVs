@@ -257,6 +257,9 @@ namespace std
 
 		void mapOpenDepotsToGroup();
 
+		// return the odd indexes of coverage lines in path p
+		vector<int> getOddCVLIndexes(const path& p);
+
 		// return the map from depots and theirs groups
 		map<int, set<int>> getMapDG(solution s);
 

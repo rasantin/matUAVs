@@ -76,6 +76,6 @@ Robot_5@Base_1
 Robot_6@Base_1
 
 @param
-nexec:15
-n:50
+nexec:25
+n:150
 cvl_subset:5

@@ -1,7 +1,5 @@
 # matUAVs - Otimização de Roteamento de UAVs
 
-## Resposta: Quais tarefas o compilador faz por aqui?
-
 O compilador (MSVC) neste projeto executa **7 tarefas principais**:
 
 ### 🧹 1. Limpeza

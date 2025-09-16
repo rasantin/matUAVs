@@ -9,225 +9,224 @@
 #include <chrono>
 #include <iomanip>
 
-namespace std
+void findsubset(int n, vector<vector<double>> &sol, vector<vector<int>> *subsets);
+void DFS(const vector<vector<double>> &g, int v, int n, bool *seen, vector<int> *subset, bool *inserted);
+
+class subtourelim : public GRBCallback
 {
+public:
+	GRBVar **vars;
+	GRBVar *vars_d;
 
-	void findsubset(int n, double **sol, vector<vector<int>> *subsets);
-	void DFS(double **g, int v, int n, bool *seen, vector<int> *subset, bool *inserted);
-
-	class subtourelim : public GRBCallback
+	int n;
+	int nd;
+	int wm;
+	subtourelim(GRBVar **xvars, int xn, GRBVar *yvars, int yn)
 	{
-	public:
-		GRBVar **vars;
-		GRBVar *vars_d;
+		vars = xvars;
+		n = xn;
+		vars_d = yvars;
+		nd = yn;
+	}
 
-		int n;
-		int nd;
-		int wm;
-		subtourelim(GRBVar **xvars, int xn, GRBVar *yvars, int yn, int warm_start)
+protected:
+	void callback()
+	{
+		try
 		{
-			vars = xvars;
-			n = xn;
-			vars_d = yvars;
-			nd = yn;
-			wm = warm_start;
-		}
-
-	protected:
-		void callback()
-		{
-			try
+			if (where == GRB_CB_MIPSOL)
 			{
-				if (where == GRB_CB_MIPSOL)
+				// 1. Recupera solução atual
+				// 2. Identifica subconjuntos desconectados (subtours)
+				// 3. Para cada subconjunto sem a base, adiciona restrição lazy
+				//    para forçar ligação com o restante do grafo
+				// 4. Libera memória alocada
+
+				// Found an integer feasible solution - does it visit every node?
+				vector<vector<double>> x(n, vector<double>(n, 0.0));
+				for (int i = 0; i < n; i++)
 				{
-					// 1. Recupera solução atual
-					// 2. Identifica subconjuntos desconectados (subtours)
-					// 3. Para cada subconjunto sem a base, adiciona restrição lazy
-					//    para forçar ligação com o restante do grafo
-					// 4. Libera memória alocada
+					double *sol = getSolution(vars[i], n);
+					copy(sol, sol + n, x[i].begin());
+					delete[] sol;
+				}
+				int i, j;
 
-					// Found an integer feasible solution - does it visit every node?
-					double **x = new double *[n];
-					int i, j;
-					for (i = 0; i < n; i++)
-						x[i] = getSolution(vars[i], n);
+				vector<double> y(nd, 0.0);
+				double *sol_y = getSolution(vars_d, nd);
+				copy(sol_y, sol_y + nd, y.begin());
 
-					double *y = new double[nd];
+				vector<vector<int>> subsets;
+				findsubset(n, x, &subsets);
 
-					for (i = 0; i < nd; i++)
-						y[i] = getSolution(vars_d[i]);
+				vector<int> depots_on_subset;
 
-					vector<vector<int>> subsets;
-					findsubset(n, x, &subsets);
+				// all strong connect components tha  does not contain the depot
+				vector<vector<int>> subsets_S;
 
-					vector<int> depots_on_subset;
+				// subset with base node
+				vector<int> not_S;
 
-					// all strong connect components tha  does not contain the depot
-					vector<vector<int>> subsets_S;
+				double obj_bnd = getDoubleInfo(GRB_CB_MIPSOL_OBJBND);
+				if (subsets.size() > 1)
+				{
+					vector<vector<int>> ordered_subsets;
+					// inserire o subset que possui a base no final
+					bool found_base = false;
 
-					// subset with base node
-					vector<int> not_S;
-
-					double obj_bnd = getDoubleInfo(GRB_CB_MIPSOL_OBJBND);
-					// se não for warm start e obj_bnd não definido
-					if (!(wm == 1 && obj_bnd < 0))
+					for (auto set : subsets)
 					{
-
-						if (subsets.size() > 1)
+						// encontrar o grupo que contém a base
+						for (auto vert : set)
 						{
-
-							vector<vector<int>> ordered_subsets;
-							// inserire o subset que possui a base no final
-							bool found_base = false;
-
-							for (auto set : subsets)
-							{
-								// encontrar o grupo que contém a base
-								for (auto vert : set)
-								{
-									if (vert == nd)
-										found_base = true;
-								}
-								if (!found_base)
-								{ // caso o subset não tenha a base insere no vetor
-									subsets_S.emplace_back(set);
-								}
-								else
-								{ // armazenar o subset que contém a base
-									not_S.insert(not_S.end(), set.begin(), set.end());
-									found_base = false;
-								}
-							}
-							ordered_subsets.insert(ordered_subsets.begin(), subsets_S.begin(), subsets_S.end());
-
-							// for(auto it_subset_a = subsets_S.begin(); it_subset_a !=subsets_S.end();it_subset_a++){
-
-							ordered_subsets.push_back(not_S);
-
-							// obter as arestas entre os subconjuntos S e o não S.
-							for (auto it_subset_a = ordered_subsets.begin(); it_subset_a != ordered_subsets.end(); it_subset_a++)
-							{
-
-								if (it_subset_a == ordered_subsets.end() - 1)
-									continue;
-
-								depots_on_subset.clear();
-								for (auto it_id = it_subset_a->begin(); it_id != it_subset_a->end(); it_id++)
-								{
-									if (*it_id < nd)
-										depots_on_subset.emplace_back(*it_id);
-								}
-
-								if (depots_on_subset.empty())
-									continue;
-
-								GRBLinExpr expr = 0;
-								for (auto it_subset_b = ordered_subsets.begin(); it_subset_b != ordered_subsets.end(); it_subset_b++)
-								{
-									if (it_subset_b == it_subset_a)
-										continue;
-									for (auto it_id_i = it_subset_a->begin(); it_id_i != it_subset_a->end(); it_id_i++)
-									{
-										i = *it_id_i;
-										for (auto it_id_j = it_subset_b->begin(); it_id_j != it_subset_b->end(); it_id_j++)
-										{
-											j = *it_id_j;
-											expr += vars[i][j];
-										}
-									}
-								}
-								// adicinar as restrições para cada depot em S
-								for (int d : depots_on_subset)
-									addLazy(expr >= y[d]);
-							}
+							if (vert == nd)
+								found_base = true;
+						}
+						if (!found_base)
+						{ // caso o subset não tenha a base insere no vetor
+							subsets_S.emplace_back(set);
+						}
+						else
+						{ // armazenar o subset que contém a base
+							not_S.insert(not_S.end(), set.begin(), set.end());
+							found_base = false;
 						}
 					}
+					ordered_subsets.insert(ordered_subsets.begin(), subsets_S.begin(), subsets_S.end());
 
-					for (int i = 0; i < n; i++)
-						delete[] x[i];
-					delete[] y;
+					// for(auto it_subset_a = subsets_S.begin(); it_subset_a !=subsets_S.end();it_subset_a++){
+
+					ordered_subsets.push_back(not_S);
+
+					// obter as arestas entre os subconjuntos S e o não S.
+					for (auto it_subset_a = ordered_subsets.begin(); it_subset_a != ordered_subsets.end(); it_subset_a++)
+					{
+
+						if (it_subset_a == ordered_subsets.end() - 1)
+							continue;
+
+						depots_on_subset.clear();
+						for (auto it_id = it_subset_a->begin(); it_id != it_subset_a->end(); it_id++)
+						{
+							if (*it_id < nd)
+								depots_on_subset.emplace_back(*it_id);
+						}
+
+						if (depots_on_subset.empty())
+							continue;
+
+						GRBLinExpr expr = 0;
+						for (auto it_subset_b = ordered_subsets.begin(); it_subset_b != ordered_subsets.end(); it_subset_b++)
+						{
+							if (it_subset_b == it_subset_a)
+								continue;
+							for (auto it_id_i = it_subset_a->begin(); it_id_i != it_subset_a->end(); it_id_i++)
+							{
+								i = *it_id_i;
+								for (auto it_id_j = it_subset_b->begin(); it_id_j != it_subset_b->end(); it_id_j++)
+								{
+									j = *it_id_j;
+									expr += vars[i][j];
+								}
+							}
+						}
+						// adicinar as restrições para cada depot em S
+						// for (int d : depots_on_subset)
+						// addLazy(expr >= y[d]);
+						const double DEPOT_ACTIVE_THRESHOLD = 0.5;
+						double max_y = 0;
+						for (int d : depots_on_subset)
+							if (y[d] > max_y)
+								max_y = y[d];
+
+						if (max_y > DEPOT_ACTIVE_THRESHOLD) // depósito ativo
+							addLazy(expr >= 1);				// exige ligação fora do subconjunto
+					}
 				}
-			}
-			catch (GRBException &e)
-			{
-				cout << "Error number: " << e.getErrorCode() << endl;
-				cout << e.getMessage() << endl;
-			}
-			catch (...)
-			{
-				cout << "Error during callback" << endl;
 			}
 		}
-	};
-
-	// busca em profundidade para encontrar os componentes conectados
-	void DFS(double **g, int v, int n, bool *seen, vector<int> *subset, bool *inserted)
-	{
-		seen[v] = true;
-		for (int u = 0; u < n; u++)
+		catch (GRBException &e)
 		{
-			if (g[v][u] > 0.5)
+			cout << "[subtourelim callback] Error number: " << e.getErrorCode() << endl;
+			cout << "[subtourelim callback] Message: " << e.getMessage() << endl;
+		}
+		catch (...)
+		{
+			cout << "[subtourelim callback] Unknown error during callback" << endl;
+		}
+	}
+};
+
+// busca em profundidade para encontrar os componentes conectados
+void DFS(const vector<vector<double>> &g, int v, int n, bool *seen, vector<int> *subset, bool *inserted)
+{
+	seen[v] = true;
+	for (int u = 0; u < n; u++)
+	{
+		if (g[v][u] > 0.5)
+		{
+			if (!inserted[v])
 			{
-				if (!inserted[v])
-				{
-					subset->push_back(v);
-					inserted[v] = true;
-				}
-				if (!seen[u])
-				{
-					DFS(g, u, n, seen, subset, inserted);
-				}
+				subset->push_back(v);
+				inserted[v] = true;
+			}
+			if (!seen[u])
+			{
+				DFS(g, u, n, seen, subset, inserted);
 			}
 		}
 	}
+}
 
-	// Dado uma solução inteira-viável'sol',
-	// retorne os componetes conectados.
-	void findsubset(int n,
-					double **sol,
-					vector<vector<int>> *subsets)
+// Dado uma solução inteira-viável'sol',
+// retorne os componetes conectados.
+void findsubset(int n,
+				vector<vector<double>> &sol,
+				vector<vector<int>> *subsets)
+{
+	int i;
+
+	subsets->clear();
+	vector<int> subset;
+
+	bool *node_seen = new bool[n];
+	for (i = 0; i < n; i++)
+		node_seen[i] = false;
+
+	bool *inserted = new bool[n];
+	for (i = 0; i < n; i++)
+		inserted[i] = false;
+
+	// encontrar os componetes conectados
+	for (int v = 0; v < n; v++)
 	{
-		int i;
+		if (!node_seen[v])
+			DFS(sol, v, n, node_seen, &subset, inserted);
 
-		subsets->clear();
-		vector<int> subset;
-
-		bool *node_seen = new bool[n];
-		for (i = 0; i < n; i++)
-			node_seen[i] = false;
-
-		bool *inserted = new bool[n];
-		for (i = 0; i < n; i++)
-			inserted[i] = false;
-
-		// encontrar os componetes conectados
-		for (int v = 0; v < n; v++)
+		if (!subset.empty())
 		{
-			if (!node_seen[v])
-				DFS(sol, v, n, node_seen, &subset, inserted);
-
-			if (!subset.empty())
-			{
-				subsets->push_back(subset);
-				subset.clear();
-			}
+			subsets->push_back(subset);
+			subset.clear();
 		}
-		delete[] node_seen;
-		delete[] inserted;
 	}
+	delete[] node_seen;
+	delete[] inserted;
+}
 
-	/**
-	 * @brief Calcula a solução inicial para todos os grupos de cobertura.
-	 *
-	 * - Encontra o melhor caminho (rota) para cada grupo usando bestPath().
-	 * - Calcula algumas métricas (custo total, caminho mais custoso, tempo de execução).
-	 * - Prepara a estrutura de solução inicial para otimização posterior.
-	 *
-	 * @param s Ponteiro para a estrutura solution que será preenchida com os resultados.
-	 * @throws std::runtime_error Se bestPath() retornar um custo negativo (falha na construção).
-	 * @note O vetor de depots não inclui a base, pois esta não sofrerá modificações.
-	 */
+/**
+ * @brief Calcula a solução inicial para todos os grupos de cobertura.
+ *
+ * - Encontra o melhor caminho (rota) para cada grupo usando bestPath().
+ * - Calcula algumas métricas (custo total, caminho mais custoso, tempo de execução).
+ * - Prepara a estrutura de solução inicial para otimização posterior.
+ *
+ * @param s Ponteiro para a estrutura solution que será preenchida com os resultados.
+ * @throws std::runtime_error Se bestPath() retornar um custo negativo (falha na construção).
+ * @note O vetor de depots não inclui a base, pois esta não sofrerá modificações.
+ */
 
+namespace std
+{
 	void Solution::initSol(solution *s)
 	{
 		// 1. Inicializa variáveis para rastrear:
@@ -330,7 +329,8 @@ namespace std
 		{
 			set_temp = nodesSets[gID];
 
-			sol = MILP(set_temp);
+			// sol = MILP(set_temp);
+			sol = milpSolver(set_temp, {});
 
 			// muitas chamadas do gurobi, manteremos apenas a informação da última
 			// vec_call.clear();
@@ -360,7 +360,8 @@ namespace std
 				set_temp.depots = it_sub_set->depots;
 
 				// calcular a solução
-				sol = MILP(set_temp);
+				// sol = MILP(set_temp);
+				sol = milpSolver(set_temp, {});
 
 				// muitas chamadas do gurobi, materemos apenas a informação da última
 				// vec_call.clear();
@@ -398,7 +399,8 @@ namespace std
 			set_temp = nodesSets[gID];
 
 			// pass to gurobi as warm start
-			sol = MILP_Warm_Start(set_temp, sol);
+			// sol = MILP_Warm_Start(set_temp, sol);
+			sol = milpSolver(set_temp, sol);
 
 			// vec_call.clear();
 			call_info.call_id = ++call_num;
@@ -440,7 +442,91 @@ namespace std
 		set_temp = nodesSets[gID];
 
 		// pass to gurobi as warm start
-		sol = MILP_Warm_Start(set_temp, p);
+		// sol = MILP_Warm_Start(set_temp, p);
+
+		/*exploring a bug in milpSolver*/
+		/*if (gID == 4)
+		{
+
+			set_temp.cvLines.clear();
+			set_temp.cvLines.emplace_back(9);
+
+			set_temp.depots.clear();
+			set_temp.depots.emplace_back(34);
+			set_temp.depots.emplace_back(40);
+			set_temp.depots.emplace_back(43);
+			set_temp.robotID = 0;
+			set_temp.set_id = 4;
+
+			p.edges.clear();
+			edge e;
+			vector<edge> edges;
+
+			e.node_a = 0;
+			e.node_b = 43;
+			e.time = 387.06;
+			e.cost = 1443.73;
+			edges.emplace_back(e);
+
+			e.node_a = 43;
+			e.node_b = 9;
+			e.time = 384.00;
+			e.cost = 1432.33;
+			edges.emplace_back(e);
+
+			e.node_a = 9;
+			e.node_b = 10;
+			e.time = 786.42;
+			e.cost = 2933.37;
+			edges.emplace_back(e);
+
+			e.node_a = 10;
+			e.node_b = 40;
+			e.time = 0;
+			e.cost = 0;
+			edges.emplace_back(e);
+
+			e.node_a = 40;
+			e.node_b = 43;
+			e.time = 1167.60;
+			e.cost = 4355.16;
+			edges.emplace_back(e);
+
+			e.node_a = 43;
+			e.node_b = 40;
+			e.time = 1167.60;
+			e.cost = 4355.16;
+			edges.emplace_back(e);
+
+			e.node_a = 40;
+			e.node_b = 43;
+			e.time = 1167.60;
+			e.cost = 4355.16;
+			edges.emplace_back(e);
+
+			e.node_a = 43;
+			e.node_b = 0;
+			e.time = 387.06;
+			e.cost = 1443.73;
+			edges.emplace_back(e);
+
+			p.edges = std::move(edges);
+
+			p.fuelOnTarget.clear();
+			p.fuelOnTarget.emplace(9, 936);
+			p.fuelOnTarget.emplace(10, 149.56);
+
+			p.robotID = 0;
+			p.pID = 4;
+			p.pCost = 20318.67;
+			p.depots.clear();
+			p.depots.emplace(40);
+			p.depots.emplace(43);
+			p.depotsNum = 3;
+			p.targetsNum = 2;
+		}*/
+
+		sol = milpSolver(set_temp, p);
 
 		call_info.call_id = ++call_num;
 		call_info.T = set_temp.cvLines.size() * 2;
@@ -461,59 +547,52 @@ namespace std
 		return sol;
 	}
 
-	Solution::path Solution::MILP_Warm_Start(Set nodes_set, path initial_sol)
+	// MILP solver for coverage set
+	// returns a path with the best solution
+	Solution::path Solution::milpSolver(Set nodes_set, path initial_sol)
 	{
-		int i, j, T, D;
-		int baseId = 0;
-		std::chrono::time_point<std::chrono::system_clock> start, end;
+		int i, j;
 
-		path sol;
-		sol.pID = -1;
-		// colocar as informações do node_set no formato da entrada da programação inteira, chamada de coverage_set
+		// Convert node set to the input format required by the MILP model
 		Convert_NS_to_CS(nodes_set);
 
-		T = getTargetNum(); // set of targets
-		D = getDepotNum();	// fueling depots
-
-		const int N = T + D; // total nodes
-
+		int T = getTargetNum(); // number of targets
+		int D = getDepotNum();	// number of depots
+		const int N = T + D;	// total number of nodes
 		int robotID = nodes_set.robotID;
+		int baseId = getBaseID();
 
-		// base position on coverageSet;
-		baseId = getBaseID();
+		std::chrono::time_point<std::chrono::system_clock> start, end;
 
+		// Initialize solution structure
+		path sol;
+		sol.pID = -1;
+
+		// Begin model construction
 		try
 		{
-			// GRBEnv env = GRBEnv();
 			GRBModel model = GRBModel(env);
-			model.set(GRB_IntParam_OutputFlag, 0);
-			model.set(GRB_IntParam_LazyConstraints, 1);
 
-			// model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
+			// Gurobi performance parameters
+			model.set(GRB_IntParam_OutputFlag, 0);		// suppress solver output
+			model.set(GRB_IntParam_LazyConstraints, 1); // enable lazy constraints
+			model.set(GRB_IntParam_Threads, 0);			// use all available CPU cores
+
+			// Multi-objective optimization setup
+			GRBVar var_Pmax = model.addVar(0.0, GRB_INFINITY, 0.0, GRB_CONTINUOUS, "vars_Pmax");
+			GRBVar var_Dmin = model.addVar(0.0, D - 1, 0.0, GRB_INTEGER, "vars_Dmin");
+
 			GRBVar *Elem = new GRBVar[2];
+			Elem[0] = var_Pmax; // Elem[0] = objective variable Pmax
+			Elem[1] = var_Dmin; // Elem[1] = objective variable Dmin
 
-			Elem[0] = model.addVar(0, GRB_INFINITY, 0.0, GRB_CONTINUOUS, "Pmax");
-			Elem[1] = model.addVar(0, D - 1, 0.0, GRB_INTEGER, "Dmax");
+			GRBLinExpr obj0 = Elem[0];
+			model.setObjectiveN(obj0, 0, 0, 0.9999); // Main objective
 
-			Elem[0].set(GRB_StringAttr_VarName, "vars_Pmax");
-			Elem[0].set(GRB_CharAttr_VType, GRB_CONTINUOUS);
+			GRBLinExpr obj1 = Elem[1];
+			model.setObjectiveN(obj1, 1, 0, 0.0001); // Secondary objective
 
-			Elem[1].set(GRB_StringAttr_VarName, "vars_Dmin");
-			Elem[1].set(GRB_CharAttr_VType, GRB_INTEGER);
-
-			GRBLinExpr objn = 0;
-
-			// setar e configurar o objetivo 0
-			objn = Elem[0];
-			model.setObjectiveN(objn, 0, 0, 0.9999);
-
-			// setar e configurar o objetivo 1
-			objn = Elem[1];
-			model.setObjectiveN(objn, 1, 0, 0.0001);
-
-			/***************** Objective Function *****************/
 			model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
-
 			model.update();
 
 			GRBVar **vars_x = NULL;
@@ -530,7 +609,6 @@ namespace std
 			{
 				for (j = 0; j < N; j++)
 				{
-					//if (i != j)
 					vars_x[i][j] = model.addVar(0, 1, 0, GRB_BINARY, "x_i_" + itos(i) + "_j_" + itos(j));
 				}
 			}
@@ -543,6 +621,7 @@ namespace std
 				for (j = 0; j < N; j++)
 				{
 					vars_z[i][j] = model.addVar(-GRB_INFINITY, GRB_INFINITY, 0.0, GRB_CONTINUOUS, "z_i" + itos(i) + "_j_" + itos(j));
+					// vars_z[i][j] = model.addVar(0.0, GRB_INFINITY, 0.0, GRB_CONTINUOUS, "z_i" + itos(i) + "_j_" + itos(j));
 				}
 			}
 			// Create decision variables d_i for depots (D-1 depots, excluding base)
@@ -553,6 +632,9 @@ namespace std
 
 			/******************** Constraints *****************/
 			// Constraint 1: SUM_{i,j} (1 + q_k) * c_ij * x_ij <= Pmax, for all nodes i, j (robotID is fixed)
+			// Ensures that the total weighted cost of the path used by robot k (robotID)
+			// does not exceed the upper limit Pmax. The weight factor (1 + q_k) accounts for a penalty
+			// related to the robot's properties.
 			GRBLinExpr rest1 = 0;
 			for (i = 0; i < N; i++)
 			{
@@ -569,8 +651,16 @@ namespace std
 			model.addConstr(rest1 <= Elem[0], s);
 
 			/**************** Degree Constraints ***********************/
-			// Constraint 2: SUM x_di = SUM x_id para qualquer d em D diferente da base
-			//  From any target(i) there is only one robot(k) going to the vertice(j)
+			// Constraint 2: For each depot d in D excluding the base, ensure balanced flow
+			// Constraint 2_1: Sum of x_di for each depot d in D excluding the base
+			// Constraint 2_2: Sum of x_id for each depot d in D excluding the base
+			// The loop below iterates over all depots except the base (hence D-1).
+			// For each depot d, it calculates the in-degree (rest2_1) and out-degree (rest2_2),
+			// then adds a constraint ensuring the number of incoming edges equals the number of outgoing edges.
+			// This guarantees that each depot (except the base) has balanced flow,
+			// preventing inconsistencies in the graph flow and facilitating the formation of valid circuits.
+			//
+			// for (int j = 0; j < N; j++)
 			for (int d = 0; d < D - 1; d++)
 			{ // apenas depots sem a base
 				GRBLinExpr rest2_1 = 0;
@@ -587,41 +677,60 @@ namespace std
 				model.addConstr(rest2_1 == rest2_2, s);
 			}
 
-			// Constraint 3a: SUM x_id >= y_d para qualquer d em D diferente da base
-			// Constraint 3b: SUM x_di >= y_d * N para qualquer d em D diferente da base
-			//  N = (0.5*(D*(D-1))+T) quantidade de ligações entre depots + target e depots
-			for (int d = 0; d < D - 1; d++)
-			{ // apenas depots sem a base
+			// Constraints 3a and 3b: Using the same sum of incoming arcs to depot d,
+			// we impose two bounds:
+			// 3a) sum(vars_x[i][d]) >= vars_d[d], ensuring at least one incoming arc if depot is active
+			// 3b) sum(vars_x[i][d]) <= bigM * vars_d[d], bounding the maximum arcs if depot is active, zero otherwise
+			// bigM = (0.5 * (D * (D - 1)) + D * T) represents a sufficiently large upper bound
+			// corresponding to the maximum possible number of incoming arcs to a depot,
+			// including arcs from other depots and targets.
+			// It is used to activate or deactivate constraints conditionally depending on vars_d[d].
+			/*for (int d = 0; d < D - 1; d++)
+			{
 				GRBLinExpr rest3_b = 0;
-				for (i = 0; i < N; i++) // para target
-					rest3_b += vars_x[i][d];
-
+				for (i = 0; i < N; i++) // depot and targets
+				{
+					if (i != d)
+						rest3_b += vars_x[i][d];
+				}
 				string s = "Rest3_a_d_" + itos(d);
 				model.addConstr(rest3_b >= vars_d[d], s);
 				s = "Rest3_b_d_" + itos(d);
 				model.addConstr(rest3_b <= (0.5 * (D * (D - 1)) + D * T) * vars_d[d], s);
-				// model.addConstr(rest3_b <= N*vars_d[d], s);
+			}*/
+
+			// Constraint 4: A depot is active only if it has outgoing arcs
+			// Ensures vars_d[d] = 1 => at least one outgoing arc from depot d,
+			// and vars_d[d] = 0 => no outgoing arcs.
+			// Loop excludes the base depot.
+			for (int d = 0; d < D - 1; d++) // excludes the base depot
+			{
+				GRBLinExpr sum_in = 0;
+				for (int j = 0; j < N; j++)
+				{
+					if (j != d)
+					{
+						sum_in += vars_x[j][d];
+					}
+				}
+				model.addConstr(vars_d[d] <= sum_in, "Rest4_link_lb_" + itos(d));
+				model.addConstr(sum_in <= (N - 1) * vars_d[d], "Rest4_link_ub_" + itos(d));
 			}
 
-			// Constraint 4: SUM x_di <= y_d para qualquer d em D diferente da base
-			for (int d = 0; d < D - 1; d++)
-			{ // apenas depots sem a base
-				string s = "Rest4_a_" + itos(d);
-				model.addConstr(0 <= vars_d[d], s);
-
-				s = "Rest4_b_" + itos(d);
-				model.addConstr(vars_d[d] <= 1, s);
-			}
-
-			// Constraint 5: [SUM x_id0 == m)
+			// Constraint 5: [SUM x_id0 == 1]
+			// This constraint ensures that exactly one edge enters the base node (baseId).
 			GRBLinExpr rest5 = 0;
 			for (i = 0; i < N; i++)
+			{
 				if (i != baseId)
 					rest5 += vars_x[i][baseId];
+			}
 			s = "Rest5";
 			model.addConstr(rest5 == 1, s);
 
-			// Constraint 6: [SUM x_d0i == 1]
+			// Constraint 6: Ensure exactly one outgoing edge from the base node (baseId).
+			// This constraint guarantees that the route starts from the base and only one path departs from it,
+			// enforcing a single departure for the robot from its base.
 			GRBLinExpr rest6 = 0;
 			for (i = 0; i < N; i++)
 				if (i != baseId)
@@ -629,7 +738,9 @@ namespace std
 			s = "Rest6";
 			model.addConstr(rest6 == 1, s);
 
-			// Constraint 7: SUM x_ij = 1 i em V e j em T
+			// Constraint 7: For each target node j, the sum over all i of x_ij (incoming arcs to j) equals 1
+			// Targets are indexed from D to N-1 because nodes 0 to D-1 are depots, and D to N-1 are targets.
+			// Targets are indexed from D to N-1
 			for (int j = D; j < N; j++)
 			{ // cada target
 				GRBLinExpr rest7 = 0;
@@ -639,8 +750,8 @@ namespace std
 				string s = "Rest7_j_" + itos(j);
 				model.addConstr(rest7 == 1, s);
 			}
-
-			// Constraint 8: SUM x_ji = 1 i em V e j em T
+			// Constraint 8: For each target node j, ensure exactly one outgoing arc (sum over i of x_j_i = 1)
+			// Each target node must have exactly one incoming and one outgoing arc, guaranteeing unique visitation and departure.
 			for (int j = D; j < N; j++)
 			{ // cada target
 				GRBLinExpr rest8 = 0;
@@ -654,6 +765,8 @@ namespace std
 
 			//-----------------------Fuel restriction---------------------------------------------
 			// Constraint 9: SUM z_ij - SUM z_ji = SUM f_ij * x_ij, sendo i  qualquer target
+			// Rest9: For each target node i (i = D; i < N), ensure fuel flow conservation.
+			// This constraint is only applied to targets because depots do not require fuel flow conservation in this context.
 			for (i = D; i < N; i++)
 			{
 				GRBLinExpr rest9_1 = 0;
@@ -666,16 +779,23 @@ namespace std
 					{
 						rest9_1 += vars_z[i][j];
 						rest9_2 += vars_z[j][i];
-						rest9_3 += getCost(i, j) * vars_x[i][j];
+						double cost_ij = getCost(i, j);
+						if (cost_ij <= 0)
+							cost_ij = 1e-6; // Set a small positive value if cost is zero or negative
+						rest9_3 += cost_ij * vars_x[i][j];
 					}
 				}
-				string s = "Rest9_i" + itos(i);
+				string s = "Rest9_i_" + itos(i);
+				// rest9_1 = total fuel leaving node i (outflow)
+				// rest9_2 = total fuel entering node i (inflow)
+				// rest9_3 = total fuel consumed on outgoing arcs from node i
 				model.addConstr(rest9_1 - rest9_2 == rest9_3, s);
 			}
 
-			// constraint 10: z_di = f_di * x_di , sendo i qualquer target e d em D
-			// no artigo está definido  de depot para target, isso exclui a limitação da aresta no caso de depot para depot
-			// por isso alteramos o índice i para empregar qualquer vértice
+			// Constraint 10: z_di = f_di * x_di, where i can be any vertex (not only targets)
+			// In the original paper, this constraint is defined only for edges from a depot to a target,
+			// which excludes edges between depots.
+			// Therefore, index i was generalized to allow any vertex as the destination.
 			for (i = 0; i < N; ++i)
 			{
 				GRBLinExpr rest10_1 = 0;
@@ -687,12 +807,15 @@ namespace std
 					{
 						rest10_1 = vars_z[d][i];
 						rest10_2 = getCost(d, i) * vars_x[d][i];
-						string s = "Rest10_d" + itos(d) + "_i_" + itos(i);
+						string s = "Rest10_d_" + itos(d) + "_i_" + itos(i);
 						model.addConstr(rest10_1 == rest10_2, s);
 					}
 				}
 			}
-			// constraint 11  z_i_j <(F-t_j)x_ij para qualquer j em T, (i,j) em E
+			// Constraint 11  z_i_j <(F-t_j)x_ij para qualquer j em T, (i,j) em E
+			// Ensures that the fuel consumption z_ij on edge (i,j)
+			// does not exceed the remaining fuel after reaching node j,
+			// assuming j is a target. Applies only to j in T (the set of targets), i.e., j >= D.
 			for (i = 0; i < N; i++)
 			{
 				GRBLinExpr rest11_1 = 0;
@@ -709,6 +832,9 @@ namespace std
 				}
 			}
 			// constraint 12  z_i_d <(F*x_ij) para qualquer i em V, d em D
+			// Ensures that the fuel consumption z_id on edge (i,d)
+			// does not exceed the total available fuel (F) if that edge is used.
+			// Applies to any i in V and d in D.
 			for (i = 0; i < N; i++)
 			{
 				GRBLinExpr rest12_1 = 0;
@@ -726,6 +852,10 @@ namespace std
 			}
 
 			// constraint 13  z_i_j >= (s_i + f_ij)*x_ij para qualquer i em T, (i,j) em E
+			// Ensures that when departing from a target node i toward j,
+			// the robot has consumed at least the fuel required to reach i from a depot,
+			// plus the cost to go from i to j, if edge (i,j) is used.
+			// Applies to i in T and (i,j) in E.
 			for (i = D; i < N; i++)
 			{
 				GRBLinExpr rest13_1 = 0;
@@ -736,14 +866,17 @@ namespace std
 					{
 						rest13_1 = vars_z[i][j];
 						rest13_2 = (get_min_fuel_2_depot(i) + getCost(i, j)) * vars_x[i][j];
-						s = "Rest14_i_" + itos(i) + "_j_" + itos(j);
+						s = "Rest13_i_" + itos(i) + "_j_" + itos(j);
 						model.addConstr(rest13_1 >= rest13_2, s);
 					}
 				}
 			}
 
 			//******************* Coverage Constraints **************************/
-			// constraint 14: sum X_i_i+1_k + sum X_i+1_i_k = 1, i=D,D+2,...N-1
+			// Constraint 14: sum X_i_i+1_k + sum X_i+1_i_k = 1, i=D,D+2,...N-1
+			// Enforces that each target pair (i, i+1) is visited exactly once.
+			// For i in {D, D+2, ..., N-2}, ensures that either edge (i → i+1) or (i+1 → i) is used.
+			// This models full coverage of target lines (each represented by a pair of nodes).
 			for (i = D; i < N - 1; i = i + 2)
 			{
 				GRBLinExpr rest14 = 0;
@@ -751,7 +884,9 @@ namespace std
 				string s = "Rest14_i_" + itos(i);
 				model.addConstr(rest14 == 1, s);
 			}
-			// constraint 15: sum X_i_i+1_k = Sum Sum X_i_j_k, i = 2,4,N
+			// Constraint 15: sum X_i_i+1_k = Sum Sum X_i_j_k, i = 2,4,N
+			// Balances outgoing arcs from the first node of each target pair.
+			// Ensures that if a line is covered (via i → i+1), it must connect to another route node.
 			for (i = D; i < N; i = i + 2)
 			{
 				GRBLinExpr rest15_1 = 0;
@@ -765,7 +900,9 @@ namespace std
 				model.addConstr(rest15_1 == rest15_2, s);
 			}
 
-			// constraint 16: sum X_i_i-1_k = Sum Sum X_i_j_k, i =
+			// constraint 16: sum X_i_i-1_k = Sum Sum X_i_j_k, i = D+1,D+3,...N
+			// Balances outgoing arcs from the second node of each target pair.
+			// Similar to Rest15 but for even j, excluding self-loop.
 			for (i = D + 1; i < N; i = i + 2)
 			{
 				GRBLinExpr rest16_1 = 0;
@@ -780,6 +917,9 @@ namespace std
 			}
 			/********************Depot Constraint ***********************************************/
 			// Contraint 17: Dmin ==SumD[j]
+			// The number of activated depots (excluding base) must be less than or equal to Dmin.
+			// This helps limit the number of depots used in the solution.
+			// Dmin is passed through Elem[1].
 			GRBLinExpr rest17 = 0;
 			for (j = 0; j < D - 1; j++)
 			{ // vertice
@@ -788,95 +928,103 @@ namespace std
 			// model.addConstr(rest17 <= var_d, s);
 			model.addConstr(rest17 <= Elem[1], "Rest17");
 
-			/******************************************************************************************/
-			// initial solution
-			vector<vector<GRBVar>> vars_x_temp(N, vector<GRBVar>(N));
-			for (i = 0; i < N; i++)
-				for (j = 0; j < N; j++)
-				{
-					if (i != j)
-						vars_x_temp[i][j] = model.addVar(0.0, 1.0, 0.0, GRB_BINARY, "x_temp_" + itos(i) + "_" + itos(j));
-				}
-			double fuel;
-			vector<vector<double>> start_vals(N, vector<double>(N, 0.0)); // todos 0 inicialmente
+			// Determines whether a warm start can be applied by checking if the initial solution contains any edges.
+			bool hasWarmStart = !initial_sol.edges.empty();
 
-			for (auto edge : initial_sol.edges)
+			if (hasWarmStart)
 			{
-				// Verifica se os nós do edge existem no mapa de IDs
-				auto it_a = map_cvset_id_to_node_id.find(edge.node_a);
-				auto it_b = map_cvset_id_to_node_id.find(edge.node_b);
+				/******************************************************************************************/
+				//-----------------------------------------------------
+				// Build initial solution hints for the MILP warm start
+				//-----------------------------------------------------
+				// Fuel placeholder
+				double fuel;
 
-				// Se algum dos nós não estiver no mapa, ignora esse edge
-				if (it_a == map_cvset_id_to_node_id.end() || it_b == map_cvset_id_to_node_id.end())
-					continue;
+				// Create a matrix of initial values (0.0 by default)
+				vector<vector<double>> start_vals(N, vector<double>(N, 0.0));
 
-				i = it_a->second;
-				j = it_b->second;
-
-				// Evita a criação de variáveis com loop (i == j), que não foram adicionadas ao modelo
-				if (i == j)
-					continue;
-
-				// Marca a variável de decisão (i,j) como parte da solução inicial
-				start_vals[i][j] = 1.0;
-
-				// Se o nó de chegada for um target (j >= D), define a dica de valor para variável z
-				if (j >= D)
+				// Loop through each edge in the initial solution
+				for (auto edge : initial_sol.edges)
 				{
-					// Verifica se existe informação de combustível associada ao target
-					auto fuelIt = initial_sol.fuelOnTarget.find(edge.node_b);
-					if (fuelIt != initial_sol.fuelOnTarget.end())
+					// Find the integer node IDs from CVSet IDs
+					auto it_a = map_cvset_id_to_node_id.find(edge.node_a);
+					auto it_b = map_cvset_id_to_node_id.find(edge.node_b);
+
+					// Skip if the edge contains unknown nodes
+					if (it_a == map_cvset_id_to_node_id.end() || it_b == map_cvset_id_to_node_id.end())
+						continue;
+
+					i = it_a->second;
+					j = it_b->second;
+
+					// Skip self-loops (which are not valid in the MILP model)
+					if (i == j)
+						continue;
+
+					// Mark this edge as used in the warm start
+					start_vals[i][j] = 1.0;
+
+					// If the target node is a coverage target (not a depot), define fuel hints
+					if (j >= D)
 					{
-						// Calcula o combustível restante no target e define como dica (hint) para z_ij
-						fuel = input.getRobotFuel(robotID) - fuelIt->second;
-						vars_z[i][j].set(GRB_DoubleAttr_VarHintVal, fuel);
+						auto fuelIt = initial_sol.fuelOnTarget.find(edge.node_b);
+						if (fuelIt != initial_sol.fuelOnTarget.end())
+						{
+							// Estimate remaining fuel and set as hint for z[i][j]
+							fuel = input.getRobotFuel(robotID) - fuelIt->second;
+							vars_z[i][j].set(GRB_DoubleAttr_VarHintVal, fuel);
+						}
 					}
 				}
-			}
 
-			for (i = 0; i < N; i++)
-				for (j = 0; j < N; j++)
+				// Set warm start values for x_ij decision variables in model
+				for (i = 0; i < N; i++)
+					for (j = 0; j < N; j++)
+					{
+						if (i != j)
+							vars_x[i][j].set(GRB_DoubleAttr_Start, start_vals[i][j]);
+					}
+
+				// Assume initially that no depot is used
+				for (i = 0; i < D - 1; i++)
+					vars_d[i].set(GRB_DoubleAttr_VarHintVal, 0.0);
+
+				// Set depot hints for known depots from initial solution
+				for (auto depot : initial_sol.depots)
 				{
-					if (i != j)
-						vars_x[i][j].set(GRB_DoubleAttr_Start, start_vals[i][j]);
+					i = map_cvset_id_to_node_id.find(depot)->second;
+					vars_d[i].set(GRB_DoubleAttr_VarHintVal, 1.0);
 				}
-
-			for (i = 0; i < D - 1; i++)
-				vars_d[i].set(GRB_DoubleAttr_VarHintVal, 0.0);
-
-			for (auto depot : initial_sol.depots)
-			{
-				i = map_cvset_id_to_node_id.find(depot)->second;
-				vars_d[i].set(GRB_DoubleAttr_VarHintVal, 1.0);
 			}
 
 			/******************************************************************************************/
-			// model.set(GRB_IntParam_StartNodeLimit,0);
-			// model.set(GRB_IntParam_Method, GRB_METHOD_BARRIER);
-			// model.set(GRB_IntParam_StartNodeLimit,2000000000);
-
-			// model.set(GRB_DoubleParam_Heuristics,0);
-
+			// Update the model with all added variables and constraints before optimization
 			model.update();
 
+			// Disable Gurobi console logging
 			model.set(GRB_IntParam_LogToConsole, 0);
+
+			// Set acceptable MIP optimality gap to 1%
 			model.set(GRB_DoubleParam_MIPGap, 0.01);
 
-			// desabilitado para o cut off no callback;
-			// model.set(GRB_IntParam_PreCrush,1);
-
-			subtourelim cb = subtourelim(vars_x, N, vars_d, D - 1, 1);
+			// Create callback object for subtour elimination with warm start flag = 1
+			subtourelim cb = subtourelim(vars_x, N, vars_d, D - 1);
 			model.setCallback(&cb);
 
+			// Start measuring optimization time
 			start = std::chrono::system_clock::now();
+			// Run the optimization
 			model.optimize();
+			// End time measurement
 			end = std::chrono::system_clock::now();
 
-			// obter o tempo necessário para otimizar a rota;
+			// Calculate and store the elapsed time in milliseconds for the optimization process
 			gurobi_optimize_time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
+			// Final update to the model after optimization (usually not strictly necessary)
 			model.update();
 
+			// Retrieve optimization status (e.g., optimal, infeasible, etc.)
 			int optimstatus = model.get(GRB_IntAttr_Status);
 
 			if (optimstatus == GRB_OPTIMAL)
@@ -890,94 +1038,99 @@ namespace std
 				double time = 0;
 				double total_path_cost = 0.0;
 
-				vector<pair<int, pair<pair<int, int>, pair<double, double>>>> output;
+				// Store output edges with associated commodity
 				vector<pair<int, edge>> grb_out;
 				edge e;
 
-				int commodity = 0;
-
 				double v_x = 0;
 
-				// set the path to the solution
+				// Reconstruct the solution path from GRB variables
 				for (i = 0; i < N; i++)
 				{
 					for (j = 0; j < N; j++)
 					{
+						// Avoid self-loop
 						if (i == j)
 							continue;
 
+						// Get value of x[i][j] from solution
 						v_x = vars_x[i][j].get(GRB_DoubleAttr_X);
 
+						// Edge was selected (binary threshold)
 						if (v_x >= 0.99)
 						{
+							// Continuous value used to store fuel
 							double v_z = vars_z[i][j].get(GRB_DoubleAttr_X);
+							// Map Gurobi index to input node index
 							int index_i = getIndex(i);
 							int index_j = getIndex(j);
-							int commodity = static_cast<int>(v_z);
 
-							// não inserimos a base que é referenciada pelo índice D
-							if (j >= D)
+							// Interpreting v_z as a commodity ID
+							int commodity = static_cast<int>(round(v_z));
+
+							// Target node: insert remaining fuel information
+							if (j >= D) // D is the number of depots; j >= D means it is a target
 							{
 								sol.fuelOnTarget.emplace(getIndex(j), input.getRobotFuel(robotID) - v_z);
 								sol.targetsNum++;
 							}
 
-							if (i < D - 1)
+							// Source depot: store it in the solution
+							if (i < D - 1) // node is a depot (excluding base node which is often at D-1)
 							{
 								int id = getIndex(i);
 
 								if (mapNodesTypes[id] != 0)
 									cerr << "problem warm !\n";
+
 								sol.depots.insert(getIndex(i));
 							}
 
-							time = getCost(i, j);
-							fcost = time + (input.getRobotProp(robotID) * time);
+							// Compute cost and time from input
+							time = getCost(i, j);								 // Base travel time
+							fcost = time + (input.getRobotProp(robotID) * time); // Add proportional fuel cost
 
+							// Build edge
 							e.cost = fcost;
 							e.time = time;
 							e.node_a = index_i;
 							e.node_b = index_j;
 							total_path_cost += e.cost;
 
-							if (e.node_a == e.node_b)
-							{
-								cout << "Loop detected!\n";
-							}
-
-							// Arredonda a quantidade de vezes que a aresta é percorrida
+							// Round number of times edge is used (e.g., in multi-commodity flow)
 							int n_arcs = static_cast<int>(round(v_x));
 
-							// insere a quantidade de vezes que a aresta é percorrida
+							// Append the edge multiple times if needed
 							for (int x = 0; x < n_arcs; ++x)
 								grb_out.emplace_back(make_pair(commodity, e));
 						}
 					}
 				}
 
-				// Atribui o custo total da solução, calculado como a soma dos custos de cada aresta do caminho.
+				// Assign the total cost of the solution, calculated as the sum of edge costs in the path
 				sol.pCost = total_path_cost;
 
-				// ordernar pelo valor da commodity do maior para o menor
+				// Sort the list of edges by commodity value in descending order
+				// This ensures that higher-commodity paths are inserted first
 				sort(grb_out.begin(), grb_out.end(),
 					 [](pair<int, edge> el_1, pair<int, edge> el_2)
 					 {
 						 return el_1.first > el_2.first;
 					 });
 
-				// inserir o caminho na solução
+				// Insert the ordered edges into the solution path
 				for (const auto &itvec : grb_out)
 					sol.edges.emplace_back(itvec.second);
 
-				// caso o caminho tenha aresta fora de ordem, não configurando um circuito, ordenar
-				// isso pode ocorrer em depots, visto a possíbilidade de loops, ordenar os diversos loops que passam pelos depots.
-				// if(!IsCircuit(sol))
+				// Check if the sequence of edges forms a valid circuit
+				// Due to the presence of loops (especially at depots), edges might be out of order
+				// SortMultiplesAdjacentOnDepots tries to fix any sequence issues around depot nodes
 				SortMultiplesAdjacentOnDepots(&sol);
 
 				//----------------------------------------- teste temporário para verificar se a capacidade do robô é mantida
 				if (!PathRestrictions(sol))
 				{
-					cout << "solução não validada: warm_start" << endl;
+					cout << "Invalid solution found: warm_start" << endl;
 					sol.pCost = -1;
 					sol.robotID = -1;
 					sol.pID = -1;
@@ -985,18 +1138,20 @@ namespace std
 				}
 				//--------------------------------------------------
 
-				// contabilizar o base do robô
+				// Count depots (excluding base node) used in the solution
+				// `+1` accounts for the robot's base
 				sol.depotsNum = sol.depots.size() + 1;
 			}
 			else
-			{ // se for inviável
+			{
+				// If the model is infeasible or not solved optimally
 				sol.pCost = -1;
 				sol.robotID = -1;
 				sol.pID = -1;
-				//	model.computeIIS();
-				//	model.write("model.ilp");
-				//	model.write("model.lp");
 			}
+
+			// Manual memory deallocation for dynamically allocated GRBVar arrays
+			// vars_x, vars_d, vars_z are 2D/1D arrays of GRBVar used in the model
 			for (int i = 0; i < N; i++)
 				delete[] vars_x[i];
 			delete[] vars_x;
@@ -1015,461 +1170,7 @@ namespace std
 			cout << "Error during optimization" << endl;
 		}
 
-		return sol;
-	}
-
-	Solution::path Solution::MILP(Set nodes_set)
-	{
-		int i, j, T, D, N;
-		int baseId = 0;
-		std::chrono::time_point<std::chrono::system_clock> start, end;
-
-		path sol;
-		sol.pID = -1;
-		// colocar as informações do node_set no formato da entrada da programação inteira, chamada de coverage_set
-
-		Convert_NS_to_CS(nodes_set);
-
-		T = getTargetNum(); // set of targets
-		D = getDepotNum();	// fueling depots
-
-		N = T + D; // total nodes
-
-		int robotID = nodes_set.robotID;
-
-		// base position on coverageSet;
-		baseId = getBaseID();
-
-		try
-		{
-			// GRBEnv env = GRBEnv();
-
-			GRBModel model = GRBModel(env);
-			model.set(GRB_IntParam_OutputFlag, 0);
-
-			// Must set LazyConstraints parameter when using lazy constraints
-			model.set(GRB_IntParam_LazyConstraints, 1);
-
-			// model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
-			GRBVar *Elem = 0;
-
-			Elem = model.addVars(2);
-
-			Elem[0] = model.addVar(0, GRB_INFINITY, 0.0, GRB_CONTINUOUS, "Pmax");
-			Elem[1] = model.addVar(0, D - 1, 0.0, GRB_INTEGER, "Dmax");
-
-			Elem[0].set(GRB_StringAttr_VarName, "vars_Pmax");
-			Elem[0].set(GRB_CharAttr_VType, GRB_CONTINUOUS);
-
-			Elem[1].set(GRB_StringAttr_VarName, "vars_Dmin");
-			Elem[1].set(GRB_CharAttr_VType, GRB_INTEGER);
-
-			GRBLinExpr objn = 0;
-
-			// setar e configurar o objetivo 0
-			objn = Elem[0];
-			model.setObjectiveN(objn, 0, 0, 0.9999);
-
-			// setar e configurar o objetivo 1
-			objn = Elem[1];
-			model.setObjectiveN(objn, 1, 0, 0.0001);
-
-			/***************** Objective Function *****************/
-			model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
-			model.update();
-
-			GRBVar **vars_x = NULL;
-			vars_x = new GRBVar *[N];
-			for (i = 0; i < N; i++)
-				vars_x[i] = new GRBVar[N];
-
-			GRBVar *vars_d = new GRBVar[D - 1];
-
-			// vars_x[i][j] = model.addVar(0, 1, 0, GRB_BINARY, "x_i_"+itos(i)+"_j_"+itos(j));
-			//  Create decision variables x_ijk for all edges ...alteração do upper bound de T para 1
-			for (i = 0; i < N; i++)
-			{
-				for (j = 0; j < N; j++)
-				{ // depot to depot
-					vars_x[i][j] = model.addVar(0, 1, 0, GRB_BINARY, "x_i_" + itos(i) + "_j_" + itos(j));
-				}
-			}
-
-			vector<vector<GRBVar>> vars_z(N, vector<GRBVar>(N));
-			// GRBVar vars_z[N][N];
-			for (i = 0; i < N; i++)
-			{
-				for (j = 0; j < N; j++)
-				{
-					// vars_z[i][j] = model.addVar(-GRB_INFINITY, GRB_INFINITY, 0.0, GRB_CONTINUOUS, "z_i" + itos(i) + "_j_" + itos(j));
-					vars_z[i][j] = model.addVar(0.0, GRB_INFINITY, 0.0, GRB_CONTINUOUS, "z_i" + itos(i) + "_j_" + itos(j));
-				}
-			}
-
-			// GRBVar vars_d[D-1];
-			for (i = 0; i < D - 1; i++)
-			{
-				vars_d[i] = model.addVar(0.0, 1.0, 0, GRB_BINARY, "d_" + itos(i));
-			}
-			/******************** Constraints *****************/
-			// Constraint 1: SUM SUM(1+ q_k)c_ij * x_ijk <= Pmax  k=0, ..., M-1
-			GRBLinExpr rest1 = 0;
-			for (i = 0; i < N; i++)
-			{
-				for (j = 0; j < N; j++)
-				{
-					rest1 += (getCost(i, j) * vars_x[i][j]) + (input.getRobotProp(robotID) * getCost(i, j) * vars_x[i][j]);
-				}
-			}
-			string s = "Rest1";
-			model.addConstr(rest1 <= Elem[0], s);
-
-			/**************** Degree Constraints ***********************/
-			// Constraint 2: SUM x_di = SUM x_id para qualquer d em D diferente da base
-			//  From any target(i) there is only one robot(k) going to the vertice(j)
-			for (int d = 0; d < D - 1; d++)
-			{ // apenas depots sem a base
-				GRBLinExpr rest2_1 = 0;
-				GRBLinExpr rest2_2 = 0;
-				for (i = 0; i < N; i++)
-				{
-					rest2_1 += vars_x[d][i];
-					rest2_2 += vars_x[i][d];
-				}
-				string s = "Rest2_d_" + itos(d);
-				model.addConstr(rest2_1 == rest2_2, s);
-			}
-
-			// Constraint 3a: SUM x_id >= y_d para qualquer d em D diferente da base
-			// Constraint 3b: SUM x_di >= y_d * N para qualquer d em D diferente da base
-			//  N = (0.5*(D*(D-1))+T) quantidade de ligações entre depots + target e depots
-			for (int d = 0; d < D - 1; d++)
-			{ // apenas depots sem a base
-				GRBLinExpr rest3_b = 0;
-				for (i = 0; i < N; i++)
-				{
-					rest3_b += vars_x[i][d];
-				}
-				string s = "Rest3_a_d_" + itos(d);
-				model.addConstr(rest3_b >= vars_d[d], s);
-				s = "Rest3_b_d_" + itos(d);
-				// model.addConstr(rest3_b <= N*vars_d[d], s);
-				model.addConstr(rest3_b <= (0.5 * (D * (D - 1)) + D * T) * vars_d[d], s);
-			}
-
-			// Constraint 4: SUM x_di <= y_d para qualquer d em D diferente da base
-			for (int d = 0; d < D - 1; d++)
-			{ // apenas depots sem a base
-
-				string s = "Rest4_a_" + itos(d);
-				model.addConstr(0 <= vars_d[d], s);
-
-				s = "Rest4_b_" + itos(d);
-				model.addConstr(vars_d[d] <= 1, s);
-			}
-
-			// Constraint 5: [SUM x_id0 == m)
-			GRBLinExpr rest5 = 0;
-			for (i = 0; i < N; i++)
-			{
-				rest5 += vars_x[i][baseId];
-			}
-			s = "Rest5";
-			model.addConstr(rest5 == 1, s);
-
-			// Constraint 6: [SUM x_d0i == 1]
-			GRBLinExpr rest6 = 0;
-			for (i = 0; i < N; i++)
-			{
-				rest6 += vars_x[baseId][i];
-			}
-			s = "Rest6";
-			model.addConstr(rest6 == 1, s);
-
-			// Constraint 7: SUM x_ij = 1 i em V e j em T
-			for (int j = D; j < N; j++)
-			{ // cada target
-				GRBLinExpr rest7 = 0;
-				for (i = 0; i < N; i++)
-				{
-					rest7 += vars_x[i][j];
-				}
-				string s = "Rest7_j_" + itos(j);
-				model.addConstr(rest7 == 1, s);
-			}
-
-			// Constraint 8: SUM x_ji = 1 i em V e j em T
-			for (int j = D; j < N; j++)
-			{ // cada target
-				GRBLinExpr rest8 = 0;
-				for (i = 0; i < N; i++)
-				{
-					rest8 += vars_x[j][i];
-				}
-				string s = "Rest8_j_" + itos(j);
-				model.addConstr(rest8 == 1, s);
-			}
-
-			// Constraint 9
-			GRBLinExpr rest9 = 0;
-			for (int i = 0; i < N; i++)
-			{ // cada target
-				// skip self_loop
-				rest9 += vars_x[i][i];
-			}
-			model.addConstr(rest9 == 0, "Rest9");
-
-			// Constraint 10: SUM z_ij - SUM z_ji = SUM f_ij * x_ij, sendo i  qualquer target
-			for (i = D; i < N; i++)
-			{
-				GRBLinExpr rest10_1 = 0;
-				GRBLinExpr rest10_2 = 0;
-				GRBLinExpr rest10_3 = 0;
-
-				for (j = 0; j < N; j++)
-				{
-					rest10_1 += vars_z[i][j];
-					rest10_2 += vars_z[j][i];
-					rest10_3 += getCost(i, j) * vars_x[i][j];
-				}
-				string s = "Rest10_i" + itos(i);
-				model.addConstr(rest10_1 - rest10_2 == rest10_3, s);
-			}
-
-			// constraint 11: z_di = f_di * x_di , sendo i qualquer target e d em D
-			// no artigo está definido  de depot para target, isso exclui a limitação da aresta no caso de depot para depot
-			// por isso alteramos o índice i para empregar qualquer vértice
-			for (i = 0; i < N; ++i)
-			{
-				GRBLinExpr rest11_1 = 0;
-				GRBLinExpr rest11_2 = 0;
-
-				for (int d = 0; d < D; d++)
-				{
-					rest11_1 = vars_z[d][i];
-					rest11_2 = getCost(d, i) * vars_x[d][i];
-					string s = "Rest11_d" + itos(d) + "_i_" + itos(i);
-					model.addConstr(rest11_1 == rest11_2, s);
-				}
-			}
-
-			//------------------------------------------------------------------------------
-			// constraint 12  z_i_j <(F-t_j)x_ij para qualquer j em T, (i,j) em E
-			for (i = 0; i < N; i++)
-			{
-				GRBLinExpr rest12_1 = 0;
-				GRBLinExpr rest12_2 = 0;
-				for (j = D; j < N; j++)
-				{
-
-					rest12_1 = vars_z[i][j];
-					rest12_2 = (input.getRobotFuel(robotID) - get_min_fuel_2_depot(j)) * vars_x[i][j];
-					s = "Rest12_i_" + itos(i) + "_j_" + itos(j);
-					model.addConstr(rest12_1 <= rest12_2, s);
-				}
-			}
-
-			// constraint 13  z_i_d <(F*x_ij) para qualquer i em V, d em D
-			for (i = 0; i < N; i++)
-			{
-				GRBLinExpr rest13_1 = 0;
-				GRBLinExpr rest13_2 = 0;
-				for (int d = 0; d < D; d++)
-				{
-					rest13_1 = vars_z[i][d];
-					rest13_2 = input.getRobotFuel(robotID) * vars_x[i][d];
-					s = "Rest13_i_" + itos(i) + "_d_" + itos(d);
-					model.addConstr(rest13_1 <= rest13_2, s);
-				}
-			}
-
-			// constraint 14  z_i_j >= (s_i + f_ij)*x_ij para qualquer i em T, (i,j) em E
-			for (i = D; i < N; i++)
-			{
-				GRBLinExpr rest14_1 = 0;
-				GRBLinExpr rest14_2 = 0;
-
-				for (j = 0; j < N; j++)
-				{
-					rest14_1 = vars_z[i][j];
-					rest14_2 = (get_min_fuel_2_depot(i) + getCost(i, j)) * vars_x[i][j];
-
-					s = "Rest14_i_" + itos(i) + "_j_" + itos(j);
-					model.addConstr(rest14_1 >= rest14_2, s);
-				}
-			}
-
-			//******************* Coverage Constraints **************************/
-			// constraint 15: sum X_i_i+1_k + sum X_i+1_i_k = 1, i=D,D+2,...N-1
-			for (i = D; i < N; i = i + 2)
-			{
-				GRBLinExpr rest15 = 0;
-				rest15 += vars_x[i][i + 1] + vars_x[i + 1][i];
-				string s = "Rest15_i_" + itos(i);
-				model.addConstr(rest15 == 1, s);
-			}
-			// constraint 16: sum X_i_i+1_k = Sum Sum X_i_j_k, i = 2,4,N
-			for (i = D; i < N; i = i + 2)
-			{
-				GRBLinExpr rest16_1 = 0;
-				GRBLinExpr rest16_2 = 0;
-				rest16_1 += vars_x[i][i + 1];
-				for (j = D + 1; j < N; j = j + 2)
-					rest16_2 += vars_x[i][j];
-
-				string s = "Rest16_i_" + itos(i);
-				model.addConstr(rest16_1 == rest16_2, s);
-			}
-
-			// constraint 17: sum X_i_i-1_k = Sum Sum X_i_j_k, i =
-			for (i = D + 1; i < N; i = i + 2)
-			{
-				GRBLinExpr rest17_1 = 0;
-				GRBLinExpr rest17_2 = 0;
-				rest17_1 += vars_x[i][i - 1];
-				for (j = D; j < N; j = j + 2)
-					rest17_2 += vars_x[i][j];
-
-				string s = "Rest17_i_" + itos(i);
-				model.addConstr(rest17_1 == rest17_2, s);
-			}
-			/********************Depot Constraint ***********************************************/
-			// Contraint 18: Dmin ==SumD[j]
-			GRBLinExpr rest18 = 0;
-			for (j = 0; j < D - 1; j++)
-			{ // vertice
-				rest18 += vars_d[j];
-			}
-			// model.addConstr(rest18 == Elem[1], "Rest18");
-			model.addConstr(rest18 <= Elem[1], "Rest18");
-
-			/******************************************************************************************/
-
-			// for(i =0;i<N;++i)
-			// vars_x[i][i].set(GRB_DoubleAttr_UB,0);//
-			model.set(GRB_IntParam_LogToConsole, 0);
-			model.set(GRB_DoubleParam_MIPGap, 0.01);
-
-			subtourelim cb = subtourelim(vars_x, N, vars_d, D - 1, 0);
-			model.setCallback(&cb);
-
-			model.update();
-
-			start = std::chrono::system_clock::now();
-			model.optimize();
-
-			end = std::chrono::system_clock::now();
-			// obter o tempo necessário para otimizar a rota;
-			gurobi_optimize_time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-
-			model.update();
-
-			int optimstatus = model.get(GRB_IntAttr_Status);
-
-			if (optimstatus == GRB_OPTIMAL)
-			{
-
-				// set cost and robot to the solution
-				sol.pCost = Elem[0].get(GRB_DoubleAttr_X);
-				sol.robotID = robotID;
-				sol.pID = nodes_set.set_id;
-				sol.depotsNum = Elem[1].get(GRB_DoubleAttr_X);
-				sol.targetsNum = 0;
-
-				double fcost = 0;
-				double time = 0;
-				vector<pair<int, pair<pair<int, int>, pair<double, double>>>> output;
-				vector<pair<int, edge>> grb_out;
-				edge e;
-
-				int commodity = 0;
-
-				// set the path to the solution
-				for (i = 0; i < N; i++)
-				{
-
-					// insere a quantidade de combustível no target i
-					for (j = 0; j < N; j++)
-					{
-						if (vars_x[i][j].get(GRB_DoubleAttr_X) >= 0.98)
-						{
-
-							if (j >= D)
-							{
-								sol.fuelOnTarget.emplace(getIndex(j), input.getRobotFuel(robotID) - vars_z[i][j].get(GRB_DoubleAttr_X));
-							}
-							commodity = vars_z[i][j].get(GRB_DoubleAttr_X);
-							// não inserimos a base que é referenciada pelo índice D
-							if (i < D - 1)
-							{
-								sol.depots.insert(getIndex(i));
-							}
-							else if (i >= D)
-							{
-								sol.targetsNum++;
-							}
-
-							time = getCost(i, j);
-							fcost = time + (input.getRobotProp(robotID) * time);
-
-							e.cost = fcost;
-							e.time = time;
-							e.node_a = getIndex(i);
-							e.node_b = getIndex(j);
-
-							grb_out.emplace_back(make_pair(commodity, e));
-						}
-					}
-				}
-
-				// ordernar pelo valor da commodity do menor para a maior
-				sort(grb_out.begin(), grb_out.end(),
-					 [](pair<int, edge> el_1, pair<int, edge> el_2)
-					 {
-						 return el_1.first > el_2.first;
-					 });
-
-				// inserir o caminho na solução
-				for (auto itvec : grb_out)
-					sol.edges.emplace_back(itvec.second);
-
-				// caso o caminho tenha aresta fora de ordem, não configurando um circuito, ordenar
-				// isso pode ocorrer em depots, visto a possíbilidade de loops, ordenar os diversos loops que passam pelos depots.
-				// if(!IsCircuit(sol))
-				SortMultiplesAdjacentOnDepots(&sol);
-
-				//----------------------------------------- teste temporário para verificar se a capacidade do robô é mantida
-				if (!PathRestrictions(sol))
-					cout << "solução não validada: milp" << endl;
-				//--------------------------------------------------
-
-				// contabilizar o base do robô
-				sol.depotsNum = sol.depots.size() + 1;
-			}
-			else
-			{ // se for inviável
-				// model.computeIIS();
-				// model.write("model.ilp");
-				// model.write("model.lp");
-				sol.pCost = -1;
-				sol.robotID = -1;
-				sol.pID = -1;
-			}
-
-			for (int i = 0; i < N; i++)
-				delete[] vars_x[i];
-			delete[] vars_x;
-			delete[] vars_d;
-		}
-		catch (GRBException &e)
-		{
-			cout << "Error number: " << e.getErrorCode() << endl;
-			cout << e.getMessage() << endl;
-		}
-		catch (...)
-		{
-			cout << "Error during optimization" << endl;
-		}
+		// Return either the valid solution or a placeholder with pCost = -1 for infeasibility
 		return sol;
 	}
 
@@ -1668,13 +1369,6 @@ namespace std
 
 		bool found_best_sol = false;
 
-		for (path p : s->paths)
-		{
-			for (int id : p.depots)
-				if (id < 31)
-					cerr << "#1 Erro id em na função swap!\n";
-		}
-
 		// copy current solution groups operators: nodesSets and coverageSets
 		copyNSets();
 
@@ -1850,14 +1544,6 @@ namespace std
 					solTemp.paths[g1] = pathG1;
 					solTemp.paths[g2] = pathG2;
 
-					for (int id : pathG1.depots)
-						if (id < 31)
-							cerr << "#2 Erro id em na função swap!\n";
-
-					for (int id : pathG2.depots)
-						if (id < 31)
-							cerr << "#3 Erro id em na função swap!\n";
-
 					// changed the paths:update tempSol cost and depotsNum;
 					updateSolCosts(&solTemp);
 					// se o maior custo de shiftPath  for menor que o maior custo da solução corrente
@@ -1981,10 +1667,19 @@ namespace std
 			// obter o índice da linha em g1
 			line = getCVLIndex(g1Index, iLine);
 
+			// teste para debug
+			if (!PathRestrictions(solTemp.paths[g1Index]))
+				continue;
+
 			pathG1 = removeCL(solTemp.paths[g1Index], line);
 
 			if (pathG1.pCost <= 0)
 				continue;
+
+			if (!PathRestrictions(pathG1))
+			{
+				continue;
+			}
 
 			// para todos os outro grupos da solução
 			for (int g2Index : graphsIndex)
@@ -1995,6 +1690,11 @@ namespace std
 				if (g1Index != g2Index)
 				{ // com exceção de g1Index
 
+					// teste para debug
+					if (!PathRestrictions(solTemp.paths[g2Index]))
+					{
+						continue;
+					}
 					start = std::chrono::system_clock::now();
 					path_op = bestInsertionCL(solTemp.paths[g2Index], line);
 					end = std::chrono::system_clock::now();
@@ -2003,6 +1703,11 @@ namespace std
 
 					if (pathG2.pCost <= 1)
 						continue;
+
+					if (!PathRestrictions(pathG2))
+					{
+						continue;
+					}
 
 					double maxCost = max(pathG2.pCost, pathG1.pCost);
 					pIndex.g1Index = g1Index;
@@ -2060,6 +1765,11 @@ namespace std
 						continue;
 					}
 
+					if (!PathRestrictions(pathG2))
+					{
+						continue;
+					}
+
 					solTemp.paths[g2] = pathG2;
 
 					if (isDefinitelyGreaterThan(solTemp.paths[g1].pCost, solTemp.paths[g2].pCost, 1.0))
@@ -2070,6 +1780,12 @@ namespace std
 						{
 							solTemp = *s;
 							// restoreNSets();
+							continue;
+						}
+
+						if (!PathRestrictions(pathG1))
+						{
+							solTemp = *s;
 							continue;
 						}
 
@@ -2135,10 +1851,10 @@ namespace std
 		set<int> globalDepots;
 		vector<int> depots;
 		int targets_num = 0;
-		;
 
 		for (uint i = 0; i < s->paths.size(); ++i)
 		{
+
 			imp_path = improvePath(s->paths[i]);
 			if (imp_path.pID == -1 || imp_path.pCost < 0 || imp_path.edges.empty())
 				return false;
@@ -2514,8 +2230,8 @@ namespace std
 		p.depots.erase(depot_to_close);
 
 		//-------------------------------------------teste temporário da saída---------------------------------------
-		// if(!PathRestrictions(p))
-		// cout << "problema restrições closedepot link to next" <<endl;
+		if (!PathRestrictions(p))
+			cout << "problema restrições closedepot link to next" << endl;
 		//-------------------------------------------------------------------------------------------------
 
 		return p;
@@ -2677,7 +2393,6 @@ namespace std
 		edge e;
 		int node_a_id;
 
-		// auto it_fuel = p.fuelOnTarget.begin();
 		double fuel_available_node_a;
 		double fuel_available_node_b;
 
@@ -2824,7 +2539,6 @@ namespace std
 			// realizar a alteração da rota desviando para outro depósito.
 			if (it_edge->node_b == node_id)
 			{
-
 				// se o nó anterior for o depot de desvio, a substituição de node_b pelo mesmo nó
 				// irá gerar um loop. remover e voltar uma posição;
 				if (it_edge->node_a == node_id)
@@ -2901,8 +2615,8 @@ namespace std
 		// p.depots = depots;
 
 		//----------------------------teste temporário da saída-----------------------------------------
-		// if(!PathRestrictions(p))
-		// cout << "problema capacidade do robô removedepot" <<endl;
+		if (!PathRestrictions(p))
+			cout << "problema capacidade do robô removedepot" << endl;
 		//-------------------------------------------------------------------------------------------
 
 		return p;
@@ -2920,9 +2634,6 @@ namespace std
 
 		for (path p : s->paths)
 		{
-			for (int id : p.depots)
-				if (id < 31)
-					cerr << "Problema id depot!\n";
 			s->depots.insert(p.depots.begin(), p.depots.end()); // obter todos os depósito abertos
 			sCost += p.pCost;
 			sTargetsNum += p.fuelOnTarget.size();
@@ -3497,49 +3208,18 @@ namespace std
 		// número da quantidade de depots da solução inicial + 50% //passar como parâmetro
 		// ajustar a execução das duas perturbações.
 
-		for (path p : s->paths)
-		{
-			for (int id : p.depots)
-				if (id < 31)
-					cerr << "#1 Erro id em na função perturbation!\n";
-		}
-
 		if (choose == 0)
 		{
 			pshift(s);
-			for (path p : s->paths)
-			{
-				for (int id : p.depots)
-					if (id < 31)
-						cerr << "#2 Erro id em na função perturbation!\n";
-			}
 		}
 		else if (choose == 1)
 		{
 			openRandomDepot(s);
-			for (path p : s->paths)
-			{
-				for (int id : p.depots)
-					if (id < 31)
-						cerr << "#3 Erro id em na função perturbation!\n";
-			}
 		}
 		else if (choose == 2)
 		{
 			openRandomDepot(s);
-			for (path p : s->paths)
-			{
-				for (int id : p.depots)
-					if (id < 31)
-						cerr << "# 4Erro id em na função perturbation!\n";
-			}
 			pshift(s);
-			for (path p : s->paths)
-			{
-				for (int id : p.depots)
-					if (id < 31)
-						cerr << "#5 Erro id em na função perturbation!\n";
-			}
 		}
 	}
 
@@ -3626,11 +3306,23 @@ namespace std
 		double fuel_required = 0.0;
 		double robot_capacity = 0.0;
 		double max_fuel_required = 0.0;
+		double fuel_on_robot = 0.0;
 
 		// obtém a base do robô
 		int baseID = input.getRobotBaseId(p.robotID);
 
 		robot_capacity = input.getRobotFuel(p.robotID);
+
+		if (p.edges.front().node_a == baseID)
+			fuel_on_robot = robot_capacity;
+		else
+		{
+			auto it = p.fuelOnTarget.find(p.edges.front().node_a);
+			if (it != p.fuelOnTarget.end())
+				fuel_on_robot = it->second;
+			else
+				fuel_on_robot = robot_capacity;
+		}
 
 		for (const edge &e : p.edges)
 		{							 // percorrer todas as arestas
@@ -3643,8 +3335,23 @@ namespace std
 					max_fuel_required = fuel_required;
 
 				fuel_required = 0.0;
+				// Refueling: robot gets full capacity at depot or base
+				fuel_on_robot = robot_capacity;
+			}
+			else
+			{
+				fuel_on_robot -= e.time;
+				auto it = p.fuelOnTarget.find(e.node_b);
+				if (it != p.fuelOnTarget.end())
+				{
+					const double tolerance = 1;
+
+					if (fabs(fuel_on_robot - it->second) > tolerance)
+						return false; // fuel at target does not match
+				}
 			}
 		}
+
 		// Verificar o último trecho caso ele não termine em depot
 		if (fuel_required > max_fuel_required)
 			max_fuel_required = fuel_required;
@@ -3661,16 +3368,17 @@ namespace std
 	// verificar o custo do caminho para o novo robô, caso não tenha capacidade de percorrer o caminho retorna o custo negativo (-1)
 	Solution::path Solution::RobotCostInPath(path p)
 	{
-		double fuel_required, robot_capacity, pcost;
+		double fuel_required, robot_capacity, pcost, fuel_on_robot;
 		double max_fuel_required = numeric_limits<double>::min();
 
 		// obtém a base do robô
 		int baseID = input.getRobotBaseId(p.robotID);
-		double fuel_on_a = 0.0;
+		double fuel_on_b = 0.0;
 
 		robot_capacity = input.getRobotFuel(p.robotID);
 		fuel_required = 0;
 		pcost = 0;
+		fuel_on_robot = robot_capacity;
 
 		// atualizar o custo de cada aresta para o custo do novo robô
 		for (auto it_edges = p.edges.begin(); it_edges != p.edges.end(); ++it_edges)
@@ -3681,17 +3389,17 @@ namespace std
 			auto it_fuel_a = p.fuelOnTarget.find(it_edges->node_a);
 			auto it_fuel_b = p.fuelOnTarget.find(it_edges->node_b);
 
-			// se houver a entrada do target
-			if (it_fuel_a != p.fuelOnTarget.end())
-				fuel_on_a = it_fuel_a->second;
-			else
-				fuel_on_a = robot_capacity;
-
-			if (it_fuel_b != p.fuelOnTarget.end())
-				it_fuel_b->second = fuel_on_a - it_edges->time;
-
 			fuel_required += it_edges->time;
 			pcost += it_edges->cost;
+
+			// se houver a entrada no depot
+			if (it_fuel_a == p.fuelOnTarget.end())
+				fuel_on_robot = robot_capacity;
+
+			fuel_on_robot -= it_edges->time;
+
+			if (it_fuel_b != p.fuelOnTarget.end())
+				it_fuel_b->second = fuel_on_robot;
 
 			// verificar se o combustível necessário entre depots incluindo a base
 			if (p.depots.find(it_edges->node_b) != p.depots.end() || it_edges->node_b == baseID)
@@ -3713,6 +3421,9 @@ namespace std
 		// o robô tem capacidade de percorrer o mesmo caminho do robô anterior.
 		// atribuir o custo do caminho para o novo robô;
 		p.pCost = pcost;
+
+		if (!PathRestrictions(p))
+			cout << "solução não validada:Best Path" << endl;
 
 		return p;
 	}
@@ -3773,7 +3484,7 @@ namespace std
 			// auto itTemp = tempNodes.begin();
 			auto itMap = mapInOut.end();
 			pathCost = 0;
-			maxCost = numeric_limits<double>::min();
+			maxCost = numeric_limits<double>::lowest();
 			// get map of all nodes that enter and departure from a node;
 			while (it_edges != edge_temp.end())
 			{
@@ -3855,7 +3566,7 @@ namespace std
 		// auto itTemp = tempNodes.begin();
 		auto itMap = mapInOut.end();
 		pathCost = 0;
-		maxCost = numeric_limits<double>::min();
+		maxCost = numeric_limits<double>::lowest();
 		// get map of all nodes that enter and departure from a node;
 		while (it_edges != edge_temp.end())
 		{
@@ -3925,7 +3636,7 @@ namespace std
 		vector<edge> edge_temp = p.edges;
 		auto it_edges = edge_temp.begin();
 		pathCost = 0;
-		maxCost = numeric_limits<double>::min();
+		maxCost = numeric_limits<double>::lowest();
 
 		// 1. Contabiliza entradas e saídas de cada nó e soma o custo
 		while (it_edges != edge_temp.end())
@@ -3934,13 +3645,9 @@ namespace std
 			if (it_edges->node_a == it_edges->node_b)
 				return false;
 
-			// Incrementa contador de saída
-			auto resA = mapInOut.emplace(it_edges->node_a, make_pair(0, 0));
-			resA.first->second.first++;
-
-			// Incrementa contador de entrada
-			auto resB = mapInOut.emplace(it_edges->node_b, make_pair(0, 0));
-			resB.first->second.second++;
+			// Check for duplicate edges
+			mapInOut[it_edges->node_a].first++;
+			mapInOut[it_edges->node_b].second++;
 
 			pathCost += it_edges->cost;
 			if (maxCost < it_edges->cost)
@@ -3999,9 +3706,95 @@ namespace std
 	// Remover uma "linha de cobertura" (CL - Coverage Line) de um caminho e recalcular todos os parâmetros afetados.
 	Solution::path Solution::removeCL(path p, int cl)
 	{
+
+		// injeção de erro para teste
+
+		/*edge e;
+		vector<edge> temp_edges;
+		e.node_a = 0;
+		e.node_b = 37;
+		e.time = 550.39;
+		e.cost = 1651.17;
+		temp_edges.push_back(e);
+
+		e.node_a = 37;
+		e.node_b = 7;
+		e.time = 0;
+		e.cost = 0;
+		temp_edges.push_back(e);
+
+		e.node_a = 7;
+		e.node_b = 8;
+		e.time = 952.16;
+		e.cost = 2856.48;
+		temp_edges.push_back(e);
+
+		e.node_a = 8;
+		e.node_b = 10;
+		e.time = 45.51;
+		e.cost = 136.55;
+		temp_edges.push_back(e);
+
+		e.node_a = 10;
+		e.node_b = 9;
+		e.time = 737.27;
+		e.cost = 2211.82;
+		temp_edges.push_back(e);
+
+		e.node_a = 9;
+		e.node_b = 39;
+		e.time = 0;
+		e.cost = 0;
+		temp_edges.push_back(e);
+
+		e.node_a = 39;
+		e.node_b = 6;
+		e.time = 507.59;
+		e.cost = 1522.77;
+		temp_edges.push_back(e);
+
+		e.node_a = 6;
+		e.node_b = 5;
+		e.time = 719.45;
+		e.cost = 2158.36;
+		temp_edges.push_back(e);
+
+		e.node_a = 5;
+		e.node_b = 0;
+		e.time = 520.53;
+		e.cost = 1561.61;
+		temp_edges.push_back(e);
+
+		p.edges = temp_edges;
+
+		p.fuelOnTarget.clear();
+		p.fuelOnTarget.emplace(5, 572.95);
+		p.fuelOnTarget.emplace(6, 1292.40);
+		p.fuelOnTarget.emplace(7, 1800);
+		p.fuelOnTarget.emplace(8, 847.83);
+		p.fuelOnTarget.emplace(9, 65.04);
+		p.fuelOnTarget.emplace(10, 802.31);
+
+		p.robotID = 2;
+		p.pID = 0;
+		p.pCost = 9954.34;
+
+		p.depots.clear();
+		p.depots.insert(37);
+		p.depots.insert(39);
+
+		p.depotsNum = p.depots.size() + 1;
+		p.targetsNum = p.fuelOnTarget.size();
+
+		cl = 7;*/
+
 		double pcost = 0;
 		int t_1 = cl;
 		int t_2 = cl + 1;
+
+		// Verifica se o robô tem capacidade para o caminho antes de modificar o trajeto
+		if (!robotCapacity_val(p))
+			p.pCost = -1;
 
 		list<edge> edges(p.edges.begin(), p.edges.end());
 
@@ -4093,13 +3886,29 @@ namespace std
 		fuel_on_node_a = (it_fuel != p.fuelOnTarget.end()) ? it_fuel->second : robot_capacity;
 		fuel_on_node_b = fuel_on_node_a - edge_a->time;
 
+		if (fuel_on_node_b < 0)
+		{
+			p.pCost = -1;
+			return p;
+		}
+
 		// Atualizar combustível no novo destino (node_b da nova edge)
 		if ((it_fuel = p.fuelOnTarget.find(edge_a->node_b)) != p.fuelOnTarget.end())
+		{
 			it_fuel->second = fuel_on_node_b;
+		}
+		else
+		{
+			fuel_on_node_b = robot_capacity;
+		}
 
 		// Remover targets da LC
 		p.fuelOnTarget.erase(edge_b->node_a);
 		p.fuelOnTarget.erase(edge_b->node_b);
+
+		// Remover edge_b e edge_c
+		edges.erase(edge_b);
+		edges.erase(edge_c);
 
 		// Atualizar combustíveis após edge_a até próximo depósito (ou fim)
 		it_edge = ++edge_a; // começa da próxima após edge_a
@@ -4121,10 +3930,6 @@ namespace std
 			}
 			++it_edge;
 		}
-
-		// Remover edge_b e edge_c
-		edges.erase(edge_b);
-		edges.erase(edge_c);
 
 		for (const auto &e : edges)
 			pcost += e.cost;
@@ -4195,17 +4000,105 @@ namespace std
 		set<int> depots;
 		path path_temp;
 
+		// injeção de erro para teste
+
+		/*edge e;
+		vector<edge> temp_edges;
+		e.node_a = 0;
+		e.node_b = 33;
+		e.time = 227.65;
+		e.cost = 682.90;
+		temp_edges.push_back(e);
+
+		e.node_a = 33;
+		e.node_b = 32;
+		e.time = 922.07;
+		e.cost = 2766.21;
+		temp_edges.push_back(e);
+
+		e.node_a = 32;
+		e.node_b = 24;
+		e.time = 299.12;
+		e.cost = 897.30;
+		temp_edges.push_back(e);
+
+		e.node_a = 24;
+		e.node_b = 23;
+		e.time = 915.00;
+		e.cost = 2745.00;
+		temp_edges.push_back(e);
+
+		e.node_a = 23;
+		e.node_b = 53;
+		e.time = 0;
+		e.cost = 0;
+		temp_edges.push_back(e);
+
+		e.node_a = 53;
+		e.node_b = 56;
+		e.time = 689.42;
+		e.cost =2068.27;
+		temp_edges.push_back(e);
+
+		e.node_a = 56;
+		e.node_b = 26;
+		e.time = 0;
+		e.cost = 0;
+		temp_edges.push_back(e);
+
+		e.node_a = 26;
+		e.node_b = 25;
+		e.time = 776.098;
+		e.cost = 2328.29;
+		temp_edges.push_back(e);
+
+		e.node_a = 25;
+		e.node_b = 55;
+		e.time = 0;
+		e.cost = 0;
+		temp_edges.push_back(e);
+
+		e.node_a = 55;
+		e.node_b = 0;
+		e.time = 197.42;
+		e.cost = 592.27;
+		temp_edges.push_back(e);
+
+		p.edges = temp_edges;
+
+		p.fuelOnTarget.clear();
+		p.fuelOnTarget.emplace(0, 1602.57);
+		p.fuelOnTarget.emplace(23, 585.87);
+		p.fuelOnTarget.emplace(24, 1500.87);
+		p.fuelOnTarget.emplace(25, 1023.90);
+		p.fuelOnTarget.emplace(26, 1800.00);
+
+		p.robotID = 3;
+		p.pID = 1;
+		p.pCost = 12080.33;
+
+		p.depots.clear();
+		p.depots.insert(32);
+		p.depots.insert(33);
+		p.depots.insert(43);
+		p.depots.insert(47);
+		p.depots.insert(48);
+		p.depots.insert(53);
+		p.depots.insert(55);
+		p.depots.insert(56);
+
+		p.depotsNum = p.depots.size() + 1;
+		p.targetsNum = p.fuelOnTarget.size();
+
+		out = 3;
+		new_cl = 9;*/
+
 		// obter a lista de arestas
 		edges_list.insert(edges_list.begin(), p.edges.begin(), p.edges.end());
 
 		// obter o novo caminho do nó de saída, ligando a nova linha de cobertura e a próxima linha de cobertura do nó de saída.
 		// o reabastecimento é ajustado caso necessário.
 		path_temp = link_out_cl_in(p, out, new_cl);
-
-		for (int id : path_temp.depots)
-
-			if (id < 31)
-				cerr << "#1 Problema id new insert!\n";
 
 		if (path_temp.pCost <= 0)
 		{
@@ -4264,7 +4157,9 @@ namespace std
 		p.edges.insert(p.edges.begin(), edges_list.begin(), edges_list.end());
 
 		// atualizar os combustíveis nos targets
-		auto p_fuel = p.fuelOnTarget.begin();
+		p.fuelOnTarget.clear();
+		p.fuelOnTarget = path_temp.fuelOnTarget;
+		/*auto p_fuel = p.fuelOnTarget.begin();
 		for (auto path_temp_fuel : path_temp.fuelOnTarget)
 		{
 			p_fuel = p.fuelOnTarget.find(path_temp_fuel.first);
@@ -4272,10 +4167,10 @@ namespace std
 				p_fuel->second = path_temp_fuel.second;
 			else // caso contrário inserir o novo target
 				p.fuelOnTarget.emplace(path_temp_fuel.first, path_temp_fuel.second);
-		}
+		}*/
 
 		// atualizar os depósitos e o custo em cada target
-		p_fuel = p.fuelOnTarget.begin();
+		auto p_fuel = p.fuelOnTarget.begin();
 		double cost = 0;
 		for (auto e : p.edges)
 		{
@@ -4283,8 +4178,6 @@ namespace std
 			p_fuel = p.fuelOnTarget.find(e.node_a);
 			if (p_fuel == p.fuelOnTarget.end() && e.node_a != input.getRobotBaseId(p.robotID))
 			{
-				if (e.node_a < 31)
-					cerr << "Problema: ID \n";
 				depots.insert(e.node_a);
 			}
 		}
@@ -4295,10 +4188,6 @@ namespace std
 		p.depotsNum = p.depots.size() + 1;
 		p.targetsNum = p.fuelOnTarget.size();
 		p.pCost = cost;
-
-		for (int id : p.depots)
-			if (id < 31)
-				cerr << "1 Erro id em na função perturbation!\n";
 
 		//---------------------------------------------------teste temporário da saída-----------------------
 		if (!PathRestrictions(p))
@@ -4653,6 +4542,9 @@ namespace std
 
 		// atualizar targetNum
 		p.targetsNum = p.fuelOnTarget.size();
+
+		if (!PathRestrictions(p))
+			cout << "solução não validada:Best Path" << endl;
 
 		return p;
 	}
@@ -5033,6 +4925,10 @@ namespace std
 		path_temp.pCost = 0;
 		path_temp.fuelOnTarget.clear();
 
+		// verifica se já existe erro em fuelOnTarget do caminho p
+		if (!robotCapacity_val(p))
+			cout << "Robot Capacity problem\n";
+
 		// obter a direção da linha de cobertura de saída
 		dir_out = getCLDirection(p, out);
 
@@ -5111,14 +5007,14 @@ namespace std
 			new_edges.emplace_back(edge_temp);
 		}
 		auto it_new_edges = new_edges.begin();
-		auto it_fuel = p.fuelOnTarget.begin();
+		auto it_fuel = path_temp.fuelOnTarget.begin();
 		while (!new_edges.empty())
 		{
 
 			fuel_remaining = 0.0;
 
-			it_fuel = p.fuelOnTarget.find(it_new_edges->node_a);
-			if (it_fuel != p.fuelOnTarget.end())
+			it_fuel = path_temp.fuelOnTarget.find(it_new_edges->node_a);
+			if (it_fuel != path_temp.fuelOnTarget.end())
 				fuel_remaining = it_fuel->second;
 
 			fuel_required = it_new_edges->time;
@@ -5139,7 +5035,7 @@ namespace std
 				{
 					// obter o segmento do menor caminho possível lingando node_a e node_b
 					// passando pelos postos.
-					p_segment = GetSPTOverOpenDepots(p, it_new_edges->node_a, it_new_edges->node_b);
+					p_segment = GetSPTOverOpenDepots(path_temp, it_new_edges->node_a, it_new_edges->node_b);
 
 					if (p_segment.edges.empty())
 					{
@@ -5156,11 +5052,11 @@ namespace std
 					// atualizar o vetor de combustível em cada target
 					for (auto fuel_segment : p_segment.fuelOnTarget)
 					{
-						it_fuel = p.fuelOnTarget.find(fuel_segment.first);
-						if (it_fuel != p.fuelOnTarget.end())
+						it_fuel = path_temp.fuelOnTarget.find(fuel_segment.first);
+						if (it_fuel != path_temp.fuelOnTarget.end())
 							it_fuel->second = fuel_segment.second;
 						else
-							p.fuelOnTarget.emplace(fuel_segment.first, fuel_segment.second);
+							path_temp.fuelOnTarget.emplace(fuel_segment.first, fuel_segment.second);
 					}
 				}
 				else
@@ -5178,7 +5074,7 @@ namespace std
 
 					// edge_list.back().node_b = input.getDepotIdOnTarget(it_new_edges->node_a);
 					// obter o segmento o menor caminho possível lingando node_a e node_b
-					p_segment = GetSPTOverOpenDepots(p, edge_list.back().node_a, edge_list.back().node_b);
+					p_segment = GetSPTOverOpenDepots(path_temp, edge_list.back().node_a, edge_list.back().node_b);
 
 					if (p_segment.edges.empty())
 					{
@@ -5196,11 +5092,11 @@ namespace std
 					// atualizar o vetor de combustível em cada target
 					for (auto fuel_segment : p_segment.fuelOnTarget)
 					{
-						it_fuel = p.fuelOnTarget.find(fuel_segment.first);
-						if (it_fuel != p.fuelOnTarget.end())
+						it_fuel = path_temp.fuelOnTarget.find(fuel_segment.first);
+						if (it_fuel != path_temp.fuelOnTarget.end())
 							it_fuel->second = fuel_segment.second;
 						else
-							p.fuelOnTarget.emplace(fuel_segment.first, fuel_segment.second);
+							path_temp.fuelOnTarget.emplace(fuel_segment.first, fuel_segment.second);
 					}
 
 					// inserir a linha de cobertura
@@ -5212,8 +5108,8 @@ namespace std
 					path_temp.pCost += edge_temp.cost;
 
 					// obter o combustível restante no nó de partida node_a.
-					it_fuel = p.fuelOnTarget.find(edge_temp.node_a);
-					if (it_fuel != p.fuelOnTarget.end())
+					it_fuel = path_temp.fuelOnTarget.find(edge_temp.node_a);
+					if (it_fuel != path_temp.fuelOnTarget.end())
 						fuel_remaining = it_fuel->second;
 
 					// combustível necessário para o deslocamento
@@ -5229,11 +5125,11 @@ namespace std
 					}
 
 					// atualizar o combustível em node_b após o deslocamento
-					it_fuel = p.fuelOnTarget.find(edge_temp.node_b);
-					if (it_fuel != p.fuelOnTarget.end()) // se o target já existir em fuelontarget
+					it_fuel = path_temp.fuelOnTarget.find(edge_temp.node_b);
+					if (it_fuel != path_temp.fuelOnTarget.end()) // se o target já existir em fuelontarget
 						it_fuel->second = fuel_on_arrival;
 					else // caso o nó não tenha sido alterado
-						p.fuelOnTarget.emplace(edge_temp.node_b, fuel_on_arrival);
+						path_temp.fuelOnTarget.emplace(edge_temp.node_b, fuel_on_arrival);
 				}
 			}
 			else
@@ -5241,11 +5137,11 @@ namespace std
 
 				if (input.isTarget(it_new_edges->node_b))
 				{
-					it_fuel = p.fuelOnTarget.find(it_new_edges->node_b);
-					if (it_fuel != p.fuelOnTarget.end())
+					it_fuel = path_temp.fuelOnTarget.find(it_new_edges->node_b);
+					if (it_fuel != path_temp.fuelOnTarget.end())
 						it_fuel->second = fuel_on_arrival;
 					else // caso não tenha o target na lista
-						p.fuelOnTarget.emplace(it_new_edges->node_b, fuel_on_arrival);
+						path_temp.fuelOnTarget.emplace(it_new_edges->node_b, fuel_on_arrival);
 				}
 
 				// edge_list.emplace_back(*it_edge);
@@ -5259,7 +5155,7 @@ namespace std
 			//++it_new_edges;
 		}
 
-		path_temp.fuelOnTarget = p.fuelOnTarget;
+		// path_temp.fuelOnTarget = p.fuelOnTarget;
 		path_temp.edges.insert(path_temp.edges.begin(), edge_list.begin(), edge_list.end());
 		path_temp.targetsNum = path_temp.fuelOnTarget.size();
 
@@ -5527,7 +5423,11 @@ namespace std
 	pair<Solution::path, string> Solution::bestInsertionCL(path p, int cl)
 	{
 		// obter as linhas de cobertura de p
-		int nCL = getNumberOfLines(p.pID);
+		// int nCL = getNumberOfLines(p.pID);
+
+		vector<int> cvlID = getOddCVLIndexes(p);
+		int nCL = cvlID.size();
+
 		int pos = 0;
 		path new_path, pathTemp, minPath;
 		double minPCost = numeric_limits<double>::max();
@@ -5540,7 +5440,8 @@ namespace std
 		for (int i = 0; i < nCL; i++)
 		{
 			// position to insert
-			pos = getCVLIndex(p.pID, i);
+			// pos = getCVLIndex(p.pID, i);
+			pos = cvlID[i];
 
 			// new_path = insertCL(p,pos,cl);
 			new_path = new_insert(p, pos, cl);
@@ -5552,12 +5453,21 @@ namespace std
 				continue;
 			}
 
+			// teste para debug
+			if (!PathRestrictions(new_path))
+			{
+				cout << "solução NÃO validada best\n";
+			}
+
 			path_op = EvalOthersOrientationsOnPath(new_path, cl);
 
 			pathTemp = path_op.first;
 
-			// if(!PathRestrictions(pathTemp))
-			// cout <<"Restrição bestInsertionCL" <<endl;
+			// teste para debug
+			if (!PathRestrictions(pathTemp))
+			{
+				cout << "solução NÃO validada best\n";
+			}
 
 			// se o caminho for inviável tentar próxima inserção
 			if (pathTemp.pCost < 0)
@@ -5815,8 +5725,9 @@ namespace std
 		vector<pair<pair<int, int>, pair<double, double>>> walkVector;
 
 		// obter o combustível restante nó de saída da linha de cobertura inserida.
-		if (p.fuelOnTarget.find(cl_node) != p.fuelOnTarget.end())
-			fuel_remaning = p.fuelOnTarget.find(cl_node)->second;
+		auto itFuel = path_temp.fuelOnTarget.find(cl_node);
+		if (itFuel != path_temp.fuelOnTarget.end())
+			fuel_remaning = itFuel->second;
 
 		// inicializar as infos do path_temp.
 		path_temp.pCost = 0;
@@ -5842,15 +5753,14 @@ namespace std
 		edge_list.emplace_back(link_path_to_base);
 
 		// adicinoar o combustível disponível no robô no node pos.
-		auto itFuel = p.fuelOnTarget.find(cl_node);
-		if (itFuel != p.fuelOnTarget.end())
+		itFuel = path_temp.fuelOnTarget.find(cl_node);
+		if (itFuel != path_temp.fuelOnTarget.end())
 			itFuel->second = fuel_remaning;
 
 		// inicializar os ponteiros
 		auto it_list = edge_list.begin();
 		while (it_list != edge_list.end())
 		{
-
 			// se o tempo para percorrer a aresta for maior que a capacidade de combustível
 			if (it_list->time > input.getRobotFuel(p.robotID))
 			{
@@ -5864,8 +5774,9 @@ namespace std
 			fuel_required = it_list->time;
 
 			// se o nó de saída for target, obter o combustível disponível
-			if (p.fuelOnTarget.find(it_list->node_a) != p.fuelOnTarget.end())
-				fuel_on_node = p.fuelOnTarget.find(it_list->node_a)->second;
+			itFuel = path_temp.fuelOnTarget.find(it_list->node_a);
+			if (itFuel != path_temp.fuelOnTarget.end())
+				fuel_on_node = itFuel->second;
 			// caso o nó de saída não seja target, o robô está saindo de algum depot
 			else // verificar se a a capcidade do robô é sufciente
 				fuel_on_node = input.getRobotFuel(path_temp.robotID);
@@ -5883,7 +5794,7 @@ namespace std
 
 					// obter o segmento do menor caminho possível lingando node_a e node_b
 					// passando pelos postos.
-					p_segment = GetSPTOverOpenDepots(p, it_list->node_a, it_list->node_b);
+					p_segment = GetSPTOverOpenDepots(path_temp, it_list->node_a, it_list->node_b);
 
 					if (p_segment.edges.empty())
 					{
@@ -5901,11 +5812,11 @@ namespace std
 					// atualizar o vetor de combustível em cada target
 					for (auto fuel_segment : p_segment.fuelOnTarget)
 					{
-						itFuel = p.fuelOnTarget.find(fuel_segment.first);
-						if (itFuel != p.fuelOnTarget.end())
+						itFuel = path_temp.fuelOnTarget.find(fuel_segment.first);
+						if (itFuel != path_temp.fuelOnTarget.end())
 							itFuel->second = fuel_segment.second;
 						else
-							p.fuelOnTarget.emplace(fuel_segment.first, fuel_segment.second);
+							path_temp.fuelOnTarget.emplace(fuel_segment.first, fuel_segment.second);
 					}
 
 					// a operação de inserção já posiciona o it_list no próximo elemento a ser analisado
@@ -5922,7 +5833,7 @@ namespace std
 					// remover o valor inserido no custo
 					path_temp.pCost -= prev_edge->cost; // remover o custo antido da variável de custo
 
-					p_segment = GetSPTOverOpenDepots(p, prev_edge->node_a, prev_edge->node_b);
+					p_segment = GetSPTOverOpenDepots(path_temp, prev_edge->node_a, prev_edge->node_b);
 
 					if (p_segment.edges.empty())
 					{
@@ -5939,20 +5850,20 @@ namespace std
 					// atualizar o vetor de combustível em cada target
 					for (auto fuel_segment : p_segment.fuelOnTarget)
 					{
-						itFuel = p.fuelOnTarget.find(fuel_segment.first);
-						if (itFuel != p.fuelOnTarget.end())
+						itFuel = path_temp.fuelOnTarget.find(fuel_segment.first);
+						if (itFuel != path_temp.fuelOnTarget.end())
 							itFuel->second = fuel_segment.second;
 						else
-							p.fuelOnTarget.emplace(fuel_segment.first, fuel_segment.second);
+							path_temp.fuelOnTarget.emplace(fuel_segment.first, fuel_segment.second);
 					}
 
 					// atualizar o combustível nos targets da LC
-					itFuel = p.fuelOnTarget.find(it_list->node_a);
-					if (itFuel != p.fuelOnTarget.end())
+					itFuel = path_temp.fuelOnTarget.find(it_list->node_a);
+					if (itFuel != path_temp.fuelOnTarget.end())
 						fuel_remaning = itFuel->second;
 
-					itFuel = p.fuelOnTarget.find(it_list->node_b);
-					if (itFuel != p.fuelOnTarget.end())
+					itFuel = path_temp.fuelOnTarget.find(it_list->node_b);
+					if (itFuel != path_temp.fuelOnTarget.end())
 					{
 						fuel_remaning = fuel_remaning - fuel_required;
 						if (isDefinitelyLessThan(fuel_remaning, 0.0))
@@ -5970,8 +5881,8 @@ namespace std
 			// caso o combustível seja suficiente, atualizar o combustível disponivel após percorrer a aresta.
 			else
 			{
-				auto itFuel = p.fuelOnTarget.find(it_list->node_b);
-				if (itFuel != p.fuelOnTarget.end())
+				auto itFuel = path_temp.fuelOnTarget.find(it_list->node_b);
+				if (itFuel != path_temp.fuelOnTarget.end())
 					itFuel->second = fuel_remaning;
 				// somar o custo da aresta na variável de custo total
 				path_temp.pCost += it_list->cost;
@@ -5980,14 +5891,18 @@ namespace std
 				++it_list;
 		}
 
-		path_temp.fuelOnTarget = p.fuelOnTarget;
-		// adiciona a base na contagem de depot;
+		// path_temp.fuelOnTarget = p.fuelOnTarget;
+		//  adiciona a base na contagem de depot;
 
 		// inserir a quantidade de targets.
 		path_temp.targetsNum = path_temp.fuelOnTarget.size();
 
 		// insere o caminho armazenado na lista em path_temp.
 		path_temp.edges.insert(path_temp.edges.begin(), edge_list.begin(), edge_list.end());
+
+		// debug: teste para verificar se o caminho é válido
+		if (!PathRestrictions(path_temp))
+			cout << "solução não validada " << endl;
 
 		return path_temp;
 	}
@@ -6029,6 +5944,12 @@ namespace std
 			path_t.pCost = -1;
 			return path_t;
 		}
+		// debug: verificação se existe erro no caminho antes de prosseguir
+		if (!robotCapacity_val(path_t))
+		{
+			cout << "capacidade violada adjsPath" << endl;
+		}
+
 		edge_list.insert(edge_list.begin(), path_costs.begin(), path_costs.end());
 
 		// limpar a informação dos combustíveis em cada nó.
@@ -6039,6 +5960,9 @@ namespace std
 
 		// limpar a rota em path_t;
 		path_t.edges.clear();
+
+		// limpar indicativo de combustível em cada target.
+		path_t.fuelOnTarget.clear();
 
 		// link base to first CL
 		link_base_to_path.node_a = baseID;
@@ -6052,9 +5976,10 @@ namespace std
 		fuel_remaning = input.getRobotFuel(path_t.robotID) - link_base_to_path.time;
 
 		// atualizar o map com a informação do combustível disponível no target de início da rota.
-		p.fuelOnTarget.find(link_base_to_path.node_b)->second = fuel_remaning;
+		// p.fuelOnTarget.find(link_base_to_path.node_b)->second = fuel_remaning;
+		path_t.fuelOnTarget.emplace(link_base_to_path.node_b, fuel_remaning);
 
-		// link last edg to base
+		// link last edge to base
 		link_path_to_base.node_a = path_costs.back().node_b;
 		link_path_to_base.node_b = input.getRobotBaseId(path_t.robotID);
 		link_path_to_base.time = getCostOnGraph(path_t.robotID, link_path_to_base.node_a, link_path_to_base.node_b);
@@ -6062,11 +5987,12 @@ namespace std
 		// inserir no fim
 		edge_list.emplace_back(link_path_to_base);
 
-		// caso o robô não tenha capacidade de atingir o target, retornar o vetor vazio.
+		// caso o robô não tenha capacidade de sair da base e atingir o target, retornar o vetor vazio.
 		if (fuel_remaning < 0)
 		{
 			path_t.pCost = -1;
 			path_t.edges.clear();
+			path_t.fuelOnTarget.clear();
 			return path_t;
 		}
 
@@ -6088,14 +6014,15 @@ namespace std
 				path_t.pCost = -1;
 				// retornar caminho vazio;
 				path_t.edges.clear();
+				path_t.fuelOnTarget.clear();
 				return path_t;
 			}
 			// obter o combustível requerido para percorrer a aresta
 			fuel_required = it_list->time;
 
 			// se o nó de saída for target, obter o combustível disponível
-			auto itFuel = p.fuelOnTarget.find(it_list->node_a);
-			if (itFuel != p.fuelOnTarget.end())
+			auto itFuel = path_t.fuelOnTarget.find(it_list->node_a);
+			if (itFuel != path_t.fuelOnTarget.end())
 				fuel_on_node = itFuel->second;
 			// caso o nó de saída não seja target, o robô está saindo de algum depot
 			else // verificar se a a capcidade do robô é sufciente
@@ -6113,11 +6040,13 @@ namespace std
 				{
 					// obter o segmento do menor caminho possível lingando node_a e node_b
 					// passando pelos postos.
-					p_segment = GetSPTOverOpenDepots(p, it_list->node_a, it_list->node_b);
+					p_segment = GetSPTOverOpenDepots(path_t, it_list->node_a, it_list->node_b);
 
 					if (p_segment.edges.empty())
 					{
 						path_t.pCost = -1;
+						path_t.edges.clear();
+						path_t.fuelOnTarget.clear();
 						return path_t;
 					}
 
@@ -6131,11 +6060,11 @@ namespace std
 					// atualizar o vetor de combustível em cada target
 					for (auto fuel_segment : p_segment.fuelOnTarget)
 					{
-						itFuel = p.fuelOnTarget.find(fuel_segment.first);
-						if (itFuel != p.fuelOnTarget.end())
+						itFuel = path_t.fuelOnTarget.find(fuel_segment.first);
+						if (itFuel != path_t.fuelOnTarget.end())
 							itFuel->second = fuel_segment.second;
 						else
-							p.fuelOnTarget.emplace(fuel_segment.first, fuel_segment.second);
+							path_t.fuelOnTarget.emplace(fuel_segment.first, fuel_segment.second);
 					}
 
 					// a operação de inserção posiciona o iterator na próxima aresta, não precisamor movê-lo
@@ -6150,11 +6079,13 @@ namespace std
 					it_list_temp--;
 
 					// obter a menor rota passando por depots
-					p_segment = GetSPTOverOpenDepots(p, it_list_temp->node_a, it_list_temp->node_b);
+					p_segment = GetSPTOverOpenDepots(path_t, it_list_temp->node_a, it_list_temp->node_b);
 
 					if (p_segment.edges.empty())
 					{
 						path_t.pCost = -1;
+						path_t.edges.clear();
+						path_t.fuelOnTarget.clear();
 						return path_t;
 					}
 
@@ -6173,22 +6104,24 @@ namespace std
 					// atualizar o vetor de combustível em cada target dado os valores do segmento
 					for (auto fuel_segment : p_segment.fuelOnTarget)
 					{
-						itFuel = p.fuelOnTarget.find(fuel_segment.first);
-						if (itFuel != p.fuelOnTarget.end())
+						itFuel = path_t.fuelOnTarget.find(fuel_segment.first);
+						if (itFuel != path_t.fuelOnTarget.end())
 							itFuel->second = fuel_segment.second;
 						else
-							p.fuelOnTarget.emplace(fuel_segment.first, fuel_segment.second);
+							path_t.fuelOnTarget.emplace(fuel_segment.first, fuel_segment.second);
 					}
 
 					// atualizar o combustível nos targets da LC
-					itFuel = p.fuelOnTarget.find(it_list->node_a);
-					if (itFuel != p.fuelOnTarget.end())
+					itFuel = path_t.fuelOnTarget.find(it_list->node_a);
+					if (itFuel != path_t.fuelOnTarget.end())
 						fuel_remaning = itFuel->second;
 
 					// atualizar o combustível dispoível no segundo target da lc
-					itFuel = p.fuelOnTarget.find(it_list->node_b);
-					if (itFuel != p.fuelOnTarget.end())
+					itFuel = path_t.fuelOnTarget.find(it_list->node_b);
+					if (itFuel != path_t.fuelOnTarget.end())
 						itFuel->second = fuel_remaning - fuel_required;
+					else
+						path_t.fuelOnTarget.emplace(it_list->node_b, fuel_remaning - fuel_required);
 
 					// adicionar o custo da linha e cobertura
 					path_t.pCost += it_list->cost;
@@ -6197,16 +6130,17 @@ namespace std
 			// caso o combustível seja suficiente, atualizar o combustível disponivel após percorrer a aresta.
 			else
 			{
-				itFuel = p.fuelOnTarget.find(it_list->node_b);
-				if (itFuel != p.fuelOnTarget.end())
+				itFuel = path_t.fuelOnTarget.find(it_list->node_b);
+				if (itFuel != path_t.fuelOnTarget.end())
 					itFuel->second = fuel_remaning;
+				else
+					path_t.fuelOnTarget.emplace(it_list->node_b, fuel_remaning);
 				// somar o custo da aresta na variável de custo total
 				path_t.pCost += it_list->cost;
 			}
 			if (it_list != edge_list.end())
 				++it_list;
 		}
-		path_t.fuelOnTarget = p.fuelOnTarget;
 
 		// insere o caminho armazenado na lista em path_t.
 		path_t.edges.insert(path_t.edges.begin(), edge_list.begin(), edge_list.end());
@@ -7546,6 +7480,9 @@ namespace std
 	{
 		map<int, int> map_depots_on_targets;
 
+		if (!PathRestrictions(*p))
+			cout << "solução não validada" << endl;
+
 		// Obter os depots associados aos targets usados no caminho
 		for (auto &e : p->fuelOnTarget)
 			map_depots_on_targets.emplace(input.getDepotIdOnTarget(e.first), e.first);
@@ -7621,21 +7558,24 @@ namespace std
 					it_edges->time = getCostOnGraph(robot_id, it_edges->node_a, it_edges->node_b);
 					it_edges->cost = it_edges->time + input.getRobotProp(robot_id) * it_edges->time;
 
-					if (new_edge.node_b < 31)
-						cerr << "openRDepotOnTargetPath ... problema id \n";
-
 					p->depots.insert(new_edge.node_b);
 					p->depotsNum++;
 
 					fuel_remaining = robot_capacity;
 					++it_edge_adjfuel;
-
+			
 					while (it_edge_adjfuel != ledges.end() && p->depots.find(it_edge_adjfuel->node_b) == p->depots.end())
 					{
+						auto itPFuel = p->fuelOnTarget.find(it_edge_adjfuel->node_b);
+						if (itPFuel == p->fuelOnTarget.end())
+							break;
+		
 						fuel_required = it_edge_adjfuel->time;
 						fuel_remaining -= fuel_required;
-						p->fuelOnTarget[it_edge_adjfuel->node_b] = fuel_remaining;
+						itPFuel->second = fuel_remaining;
+						
 						++it_edge_adjfuel;
+			
 					}
 
 					processed_targets.insert(target);
@@ -7666,12 +7606,22 @@ namespace std
 					fuel_remaining = robot_capacity;
 					++it_edge_adjfuel;
 
+
 					while (it_edge_adjfuel != ledges.end() && p->depots.find(it_edge_adjfuel->node_b) == p->depots.end())
 					{
+						
+						auto itPFuel = p->fuelOnTarget.find(it_edge_adjfuel->node_b);
+						if (itPFuel == p->fuelOnTarget.end())
+							break;
+				
+
 						fuel_required = it_edge_adjfuel->time;
 						fuel_remaining -= fuel_required;
-						p->fuelOnTarget[it_edge_adjfuel->node_b] = fuel_remaining;
+						itPFuel->second = fuel_remaining;
+
+
 						++it_edge_adjfuel;
+
 					}
 
 					processed_targets.insert(target);
@@ -7687,6 +7637,8 @@ namespace std
 		// Atualiza os depots associados ao path
 		vector<int> depots(p->depots.begin(), p->depots.end());
 		UpdateDepots(p->pID, depots);
+		if (!PathRestrictions(*p))
+			cout << "solução não validada" << endl;
 	}
 
 	void Solution::openRandomDepot(solution *s)
@@ -7704,7 +7656,11 @@ namespace std
 			path *p = &s->paths[i];
 			pcost = 0;
 
+			if (!PathRestrictions(*p))
+				cout << "solução não validada" << endl;
+
 			OpenRandomDepotsOnTargetsPath(p);
+
 			updateSolCosts(s);
 
 			// obter os targets iniciais e finais que conectam as linhas de cobertura
@@ -7933,7 +7889,6 @@ namespace std
 								// altera a aresta do caminho, desviando para o posto localizado em node_b
 								it_edge_temp->node_b = e.node_a;
 								it_edge_temp->time = getCostOnGraph(p->robotID, it_edge_temp->node_a, it_edge_temp->node_b);
-								;
 								it_edge_temp->cost = it_edge_temp->time + (it_edge_temp->time * input.getRobotProp(p->robotID));
 
 								// adicionar o tempo de deslocamento dessa arestra
@@ -7993,6 +7948,9 @@ namespace std
 					p->depotsNum = p->depots.size() + 1;
 
 					p->pCost = pcost;
+
+					if (!PathRestrictions(*p))
+						cout << "solução não validada" << endl;
 
 					//-----teste temporário da saída-------------------------------------------------------
 
@@ -8118,6 +8076,13 @@ namespace std
 							{
 								UpdateDepots(i, depots);
 							}
+
+							// teste debug
+							if (!PathRestrictions(pathG1))
+								cout << "solução não validada pshift 1 pathG1" << endl;
+
+							if (!PathRestrictions(pathG2))
+								cout << "solução não validada pshift 2 pathG2" << endl;
 
 							//-------------------------------- Testes saída ----------------------------------
 
@@ -8539,6 +8504,24 @@ namespace std
 			return true;
 		}
 		return false;
+	}
+
+	/**
+	 * @brief Returns the indexes of coverage lines (CVL) in the path that are odd.
+	 * @param p The path to inspect.
+	 * @return A vector containing the odd CVL indexes found in p.fuelOnTarget.
+	 */
+	vector<int> Solution::getOddCVLIndexes(const path &p)
+	{
+		vector<int> odd_indexes;
+		for (const auto &[index, fuel] : p.fuelOnTarget)
+		{
+			if (index % 2 != 0)
+			{
+				odd_indexes.push_back(index);
+			}
+		}
+		return odd_indexes;
 	}
 
 } /* namespace std */

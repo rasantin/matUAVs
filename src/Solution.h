@@ -83,6 +83,7 @@ namespace std
 		path bestPath(int gID);
 		path MILP(Set coverage_set);
 		path MILP_Warm_Start(Set coverage_set, path initial_sol);
+		path milpSolver(Set coverage_set, path initial_sol = path());
 		path improvePath(path p);
 
 		path removeCL(path p, int cl);
@@ -256,6 +257,9 @@ namespace std
 
 		void mapOpenDepotsToGroup();
 
+		// return the odd indexes of coverage lines in path p
+		vector<int> getOddCVLIndexes(const path& p);
+
 		// return the map from depots and theirs groups
 		map<int, set<int>> getMapDG(solution s);
 
@@ -354,6 +358,7 @@ namespace std
 		}
 
 		bool best_prediction = true;
+
 	};
 
 } /* namespace std */

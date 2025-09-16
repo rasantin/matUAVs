@@ -1,5 +1,11 @@
 # matUAVs - Otimização de Roteamento de UAVs
 
+## Descrição do Projeto
+
+**matUAVs** é um projeto acadêmico voltado para a otimização do roteamento de Veículos Aéreos Não Tripulados (UAVs) utilizando método de heurística matemática. O objetivo principal é planejar rotas de múltiplos UAVs, considerando restrições de combustível, cobertura de áreas e outros parâmetros operacionais. O sistema integra a geração de solução combinando o soluções heurística baseada no MOVNS e integrando com resultandos parciais do otimizador Gurobi.
+
+---
+
 O compilador (MSVC) neste projeto executa **7 tarefas principais**:
 
 ### 🧹 1. Limpeza

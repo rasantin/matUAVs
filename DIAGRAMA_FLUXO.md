@@ -49,16 +49,9 @@ flowchart TD
     GG --> HH[n++]
     HH --> M
 
-    %% Styling
-    classDef vndOperator fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
-    classDef decision fill:#fff3e0,stroke:#f57c00,stroke-width:2px
-    classDef process fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    classDef improvement fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
-    
-    class R,T,V,X,AA vndOperator
-    class S,U,W,Y,BB,DD decision
-    class Q,CC,EE,FF,GG process
-    class S,U,W,Y,BB improvement
+    %% Estilo único para todos os nós
+    classDef tudo fill:#e0f7fa,stroke:#006064,stroke-width:2px,color:#000000
+    class A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z,AA,BB,CC,DD,EE,FF,GG,HH tudo
 ```
 
 ## Comportamento Real dos Operadores Locais (VND)

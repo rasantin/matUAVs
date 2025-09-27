@@ -17,7 +17,7 @@ flowchart TD
     G -->|Sim| J[s.currentSol = s.best_sol]
     J --> K[Perturbação VNS]
     K --> L[n = 1]
-    L --> M{n <= input.getN()?}
+    L --> M{n menor ou igual a input.getN}
     M -->|Não| N[Avaliar soluções]
     N --> O[Obter próxima solução não visitada]
     O --> P[m++]

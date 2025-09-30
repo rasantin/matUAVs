@@ -1,208 +1,120 @@
-# Diagrama de Fluxo - matUAVs
+# Diagrama de Fluxo - Algoritmo MHCP (VNS/VND)
 
-## Fluxograma Principal
-
-```mermaid
-flowchart TD
-    A[📁 Início: main.exe] --> B[📖 Leitura Input]
-    B --> C{Arquivo Válido?}
-    C -->|Não| D[❌ Erro: Arquivo Inválido]
-    C -->|Sim| E[🏗️ Inicialização]
-    
-    E --> F[📊 Input: Nós, Robôs, Parâmetros]
-    F --> G[📁 Output: Criar Diretórios]
-    G --> H[🎯 Solution: Inicializar]
-    
-    H --> I[🔄 Loop Execuções]
-    I --> J{exec <= nexec?}
-    J -->|Não| Z[🏁 Fim]
-    J -->|Sim| K[📅 Criar Output Timestampado]
-    
-    K --> L[🔄 Loop Principal VNS/VND]
-    L --> M{Soluções Não Visitadas?}
-    M -->|Não| N[📊 Avaliação Final]
-    M -->|Sim| O[🎲 Perturbação VNS]
-    
-    O --> P[🔄 Loop VND]
-    P --> Q{n <= N?}
-    Q -->|Não| R[📈 Avaliar Pareto]
-    Q -->|Sim| S[🔧 Operadores Locais]
-    
-    S --> T[⬅️ Shift]
-    T --> U{Melhoria?}
-    U -->|Sim| V[➕ n++]
-    U -->|Não| W[🔄 Swap]
-    
-    W --> X{Melhoria?}
-    X -->|Sim| V
-    X -->|Não| Y[🔧 ImproveSol]
-    
-    Y --> AA{Melhoria?}
-    AA -->|Sim| V
-    AA -->|Não| BB[🔄 SwapRobots]
-    
-    BB --> CC{Melhoria?}
-    CC -->|Sim| V
-    CC -->|Não| DD[🗑️ CloseRandomDepot]
-    
-    DD --> EE{Melhoria?}
-    EE -->|Sim| V
-    EE -->|Não| FF[📊 Atualizar Best Solution]
-    
-    FF --> GG[🎲 Nova Perturbação]
-    GG --> V
-    V --> Q
-    
-    R --> HH[📝 Salvar Resultados]
-    HH --> II[🔄 Próxima Solução]
-    II --> M
-    
-    N --> JJ[💾 Gravar Output]
-    JJ --> KK[📋 Logs Gurobi]
-    KK --> LL[➕ exec++]
-    LL --> J
-    
-    Z --> MM[✅ Resultados Finais]
-```
-
-## Diagrama de Classes Principais
-
-```mermaid
-classDiagram
-    class Input {
-        -vector~Node~ nodes
-        -vector~Robot~ robots
-        -int targetNum, depotNum, baseNum
-        -int nexec, m, n
-        +readFile(fileName)
-        +printNodes()
-        +printRobots()
-        +getTargetsIndexes()
-        +getDepotsIndexes()
-    }
-    
-    class Solution {
-        -Graph graph
-        -vector solutions
-        -Sol best_sol, current_sol
-        +perturbation()
-        +shift()
-        +swap()
-        +improveSol()
-        +swapRobots()
-        +closeRandomDepot()
-        +IsBetterSol()
-    }
-    
-    class Output {
-        -string execPath
-        -string nodesPath
-        -string solutionPath
-        +createOutput()
-        +writeNodes()
-        +writeSolutions()
-        +gurobiCallInfo()
-    }
-    
-    class Node {
-        -double x, y
-        -string nodeType
-        -int nodeId
-        +getX()
-        +getY()
-        +getNodeType()
-    }
-    
-    class Robot {
-        -string robotId
-        -string configId
-        -double maxVel
-        -double maxFuel
-        +getVelocity()
-        +getFuel()
-    }
-    
-    Input --> Node
-    Input --> Robot
-    Solution --> Input
-    Output --> Input
-    Solution --> Output
-```
-
-## Fluxo de Dados
-
-```mermaid
-flowchart LR
-    A[📄 input.txt] --> B[📖 Input Class]
-    B --> C[🏗️ Parse Nodes]
-    B --> D[🏗️ Parse Robots]
-    B --> E[🏗️ Parse Parameters]
-    
-    C --> F[🎯 Solution Class]
-    D --> F
-    E --> F
-    
-    F --> G[🧮 Gurobi Optimization]
-    G --> H[📊 Solution Evaluation]
-    H --> I[📁 Output Class]
-    
-    I --> J[📄 nodes.txt]
-    I --> K[📁 solutions/]
-    I --> L[📋 gurobi.log]
-    
-    subgraph "Input Processing"
-        C
-        D
-        E
-    end
-    
-    subgraph "Optimization Engine"
-        F
-        G
-        H
-    end
-    
-    subgraph "Output Generation"
-        J
-        K
-        L
-    end
-```
-
-## Ciclo VNS/VND Detalhado
+## Fluxo Principal do Algoritmo
 
 ```mermaid
 flowchart TD
-    A[🎯 Solução Inicial] --> B[🎲 Perturbação VNS]
-    B --> C[🔧 VND: Shift]
-    C --> D{Melhoria?}
-    D -->|Sim| E[✅ Aceitar]
-    D -->|Não| F[🔧 VND: Swap]
+    A[Início] --> B[Ler entrada e inicializar]
+    B --> C[exec = 1]
+    C --> D{exec <= nExec?}
+    D -->|Não| Z[Fim]
+    D -->|Sim| E[Criar solução inicial S]
+    E --> F[m = 1, n = 1]
+    F --> G{HasSolutionNotVisited && m <= targetsNum?}
+    G -->|Não| H[Avaliar VecSol e Pareto]
+    H --> I[Incrementar exec]
+    I --> D
+    G -->|Sim| J[s.currentSol = s.best_sol]
+    J --> K[Perturbação VNS]
+    K --> L[n = 1]
+    L --> M{n menor ou igual a input.getN}
+    M -->|Não| N[Avaliar soluções]
+    N --> O[Obter próxima solução não visitada]
+    O --> P[m++]
+    P --> G
+    M -->|Sim| Q[Iniciar VND - Busca Local]
     
-    F --> G{Melhoria?}
-    G -->|Sim| E
-    G -->|Não| H[🔧 VND: ImproveSol]
-    
-    H --> I{Melhoria?}
-    I -->|Sim| E
-    I -->|Não| J[🔧 VND: SwapRobots]
-    
-    J --> K{Melhoria?}
-    K -->|Sim| E
-    K -->|Não| L[🔧 VND: CloseDepot]
-    
-    L --> M{Melhoria?}
-    M -->|Sim| E
-    M -->|Não| N[📊 Comparar com Best]
-    
-    N --> O{Melhor que Best?}
-    O -->|Sim| P[🔄 Atualizar Best]
-    O -->|Não| Q[🔄 Restaurar Best]
-    
-    P --> R[🎲 Nova Perturbação]
-    Q --> R
-    E --> R
-    R --> S{Continuar?}
-    S -->|Sim| C
-    S -->|Não| T[🏁 Fim VND]
+    %% VND - Variable Neighborhood Descent
+    Q --> R[Shift]
+    R --> S{Melhoria encontrada?}
+    S -->|Sim| R
+    S -->|Não| T[Swap]
+    T --> U{Melhoria encontrada?}
+    U -->|Sim| R
+    U -->|Não| V[ImproveSol]
+    V --> W{Melhoria encontrada?}
+    W -->|Sim| R
+    W -->|Não| X[SwapRobots]
+    X --> Y{Melhoria encontrada?}
+    Y -->|Sim| R
+    Y -->|Não| AA[CloseRandomDepot]
+    AA --> BB{Melhoria encontrada?}
+    BB -->|Sim| R
+    BB -->|Não| CC[Verificar se s.currentSol é melhor que s.best_sol]
+    CC --> DD{É melhor?}
+    DD -->|Sim| EE[s.best_sol = s.currentSol]
+    DD -->|Não| FF[s.currentSol = s.best_sol<br/>solutionToNodesSet]
+    EE --> GG[Perturbação VNS]
+    FF --> GG
+    GG --> HH[n++]
+    HH --> M
+
+    %% Estilo único para todos os nós
+    classDef tudo fill:#e0f7fa,stroke:#006064,stroke-width:2px,color:#000000
+    class A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z,AA,BB,CC,DD,EE,FF,GG,HH tudo
 ```
+
+## Comportamento Real dos Operadores Locais (VND)
+
+### Sequência de Execução:
+1. **Shift** → Se encontrar melhoria, **retorna ao Shift**
+2. **Swap** → Se encontrar melhoria, **retorna ao Shift** 
+3. **ImproveSol** → Se encontrar melhoria, **retorna ao Shift**
+4. **SwapRobots** → Se encontrar melhoria, **retorna ao Shift**
+5. **CloseRandomDepot** → Se encontrar melhoria, **retorna ao Shift**
+
+### Comportamento Chave:
+- **Quando um operador encontra melhoria**: O algoritmo executa `continue`, que reinicia o ciclo VND desde o primeiro operador (Shift)
+- **Apenas quando NENHUM operador encontra melhoria**: O algoritmo incrementa `n` e aplica uma nova perturbação VNS
+
+### Código Correspondente (src/MHCP.cpp, linhas 104-185):
+```cpp
+while(n <= input.getN()){
+    // VND - Variable Neighborhood Descent
+    if(s.shift(&s.currentSol)){
+        continue;  // ← RETORNA AO INÍCIO DO LOOP (linha 104)
+    }
+    
+    if(s.swap(&s.currentSol)){
+        continue;  // ← RETORNA AO INÍCIO DO LOOP (linha 104)
+    }
+    
+    if(s.improveSol(&s.currentSol)){
+        continue;  // ← RETORNA AO INÍCIO DO LOOP (linha 104)
+    }
+    
+    if(s.swapRobots(&s.currentSol)){
+        continue;  // ← RETORNA AO INÍCIO DO LOOP (linha 104)
+    }
+    
+    if(s.closeRandomDepot(&s.currentSol)){
+        continue;  // ← RETORNA AO INÍCIO DO LOOP (linha 104)
+    }
+    
+    // Só chega aqui se NENHUM operador encontrou melhoria
+    // Atualiza melhor solução e aplica nova perturbação
+    if(s.IsBetterSol(s.currentSol,s.best_sol))
+        s.best_sol = s.currentSol;
+    else{
+        s.currentSol = s.best_sol;
+        s.solutionToNodesSet(s.best_sol);
+    }
+    
+    s.perturbation(&s.currentSol,maxDepots);
+    n++;  // ← INCREMENTA APENAS QUANDO NÃO HÁ MELHORIAS
+}
+```
+
+## Diferença em Relação ao Comportamento Inicialmente Descrito
+
+### Comportamento Inicial (Incorreto):
+- Aplicar operador → Se encontrar melhoria, incrementar `n` e ir para próximo operador
+- Cada operador seria testado apenas uma vez por iteração
+
+### Comportamento Real (Correto):
+- Aplicar operador → Se encontrar melhoria, **voltar ao primeiro operador**
+- Cada operador é reaplicado **até esgotar todas as melhorias possíveis**
+- Só incrementa `n` quando **nenhum** operador consegue mais melhorias
+
+Este comportamento implementa uma estratégia de **intensificação local mais agressiva**, onde cada tipo de movimento é explorado até a exaustão antes de passar para outros tipos de movimento ou aplicar novas perturbações.
+

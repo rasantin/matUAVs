@@ -117,3 +117,4 @@ while(n <= input.getN()){
 - Só incrementa `n` quando **nenhum** operador consegue mais melhorias
 
 Este comportamento implementa uma estratégia de **intensificação local mais agressiva**, onde cada tipo de movimento é explorado até a exaustão antes de passar para outros tipos de movimento ou aplicar novas perturbações.
+

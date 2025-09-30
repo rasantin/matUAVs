@@ -83,4 +83,13 @@ O ponto de entrada é `src/MHCP.cpp`, que implementa os algoritmos de otimizaç�
 
 ---
 
-Para instruções detalhadas de configuração e compilação, consulte [COMPILACAO.md](COMPILACAO.md).
+## 📖 Documentação Completa
+
+- **[COMPILACAO.md](COMPILACAO.md)** - Instruções detalhadas de configuração e compilação
+- **[FLUXO_EXECUCAO.md](FLUXO_EXECUCAO.md)** - Fluxo completo de execução do projeto
+- **[GUIA_PRATICO.md](GUIA_PRATICO.md)** - Guia prático com exemplos e troubleshooting
+- **[DIAGRAMA_FLUXO.md](DIAGRAMA_FLUXO.md)** - Diagramas visuais do fluxo de execução
+
+---
+
+Para começar rapidamente, consulte o [Guia Prático](GUIA_PRATICO.md).

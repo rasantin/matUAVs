@@ -4,3 +4,4 @@
 # Ignorar pastas geradas automaticamente
 /bin/
 /output/
+build/

@@ -5,10 +5,11 @@
       "name": "Debug C++ com Gurobi",
       "type": "cppvsdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/bin/main.exe",
+      "program": "${workspaceFolder}/build/bin/MatUAVs.exe",
       "args": ["D_T30_R6.txt"],
+      "preLaunchTask": "Build with Cmake",
       "stopAtEntry": false,
-      "cwd": "${workspaceFolder}",
+      "cwd": "${workspaceFolder/build}",
       "environment": [],
       "console": "integratedTerminal"
     }

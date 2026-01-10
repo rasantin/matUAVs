@@ -53,13 +53,15 @@ namespace std
 			vector<pair<pair<int, int>, pair<double, double>>> nodes;
 			vector<edge> edges;
 			map<int, double> fuelOnTarget;
-			int robotID = 0;
-			int pID = 0;
+			int robotID ;
+			int pID ;
 			// sum of fcosts
 			double pCost;
 			set<int> depots;
-			int depotsNum = 0;
-			int targetsNum = 0;
+			int depotsNum;
+			int targetsNum;
+
+			path() : pCost(0.0), robotID(-1), pID(-1), depotsNum(0), targetsNum(0) {}
 		};
 
 		struct solution

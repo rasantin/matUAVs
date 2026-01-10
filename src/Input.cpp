@@ -586,7 +586,7 @@ double Input::euclidianDistance(Node &a, Node &b)
 	double dx = a.getX() - b.getX();
 	double dy = a.getY() - b.getY();
 
-	return sqrt((dx * dx) + (dy * dy));
+	return std::sqrt((dx * dx) + (dy * dy));
 }
 
 /*void Input::initMCost(std::vector<std::vector<cell>> &G)

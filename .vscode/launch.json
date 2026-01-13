@@ -2,15 +2,27 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug C++ com Gurobi",
+      "name": "Debug matUAVs(windows)",
       "type": "cppvsdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/bin/main.exe",
+      "program": "${workspaceFolder}/build/bin/Debug/matUAVs.exe",
       "args": ["D_T30_R6.txt"],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}",
       "environment": [],
       "console": "integratedTerminal"
-    }
+    },
+    {
+      "name": "Debug matUAVs (WSL / Linux)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/bin/matUAVs",
+      "args": ["D_T30_R6.txt"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb"
+  }
   ]
 }

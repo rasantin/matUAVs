@@ -7225,7 +7225,11 @@ namespace std
 		vector<int> path_nodes;
 		pair<double, pair<int, double>> pair_info;
 		int node;
-		double path_cost, cost_start_2_node, cost_node_2_goal, h;
+		//double path_cost, cost_start_2_node, cost_node_2_goal, h;
+		double path_cost = 0.0,
+       	cost_start_2_node = 0.0,
+      	 cost_node_2_goal = 0.0,
+      	 h = 0.0;
 
 		double robot_capacity = input.getRobotFuel(robot_id);
 

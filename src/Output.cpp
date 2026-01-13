@@ -3,9 +3,8 @@
 #include <string>
 #include <vector>
 #include <algorithm>
-#include <sys/stat.h>
 #include <cstdlib>
-#include <filesystem>  // C++17+
+#include <filesystem>  // C++17 cross-platform filesystem support
 
 #include "Output.h"
 

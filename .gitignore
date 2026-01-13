@@ -4,3 +4,7 @@
 # Ignorar pastas geradas automaticamente
 /bin/
 /output/
+build/gurobi.log
+build/
+build/
+cmake-build-*/

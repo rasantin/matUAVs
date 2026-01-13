@@ -13,7 +13,7 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
-#include <sys/stat.h>
+#include <filesystem>  // C++17 cross-platform filesystem support
 #include "Node.h"
 #include "Input.h"
 #include "Solution.h"

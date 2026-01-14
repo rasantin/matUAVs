@@ -1,5 +1,16 @@
 # Diagrama de Fluxo - Algoritmo MHCP (VNS/VND)
 
+## Nota sobre Multiplataforma
+
+Este fluxo é válido para **Windows (x64)** e **Linux (x64)**. O algoritmo implementado em C++17 é idêntico em ambas as plataformas, alterando apenas:
+- O executável gerado (`main.exe` no Windows, `main` no Linux)
+- O processo de build (MSVC no Windows, GCC/Clang no Linux)
+- Configuração de bibliotecas do Gurobi
+
+O código-fonte e a lógica do algoritmo são 100% compatíveis entre plataformas.
+
+---
+
 ## Fluxo Principal do Algoritmo
 
 ```mermaid
@@ -117,4 +128,126 @@ while(n <= input.getN()){
 - Só incrementa `n` quando **nenhum** operador consegue mais melhorias
 
 Este comportamento implementa uma estratégia de **intensificação local mais agressiva**, onde cada tipo de movimento é explorado até a exaustão antes de passar para outros tipos de movimento ou aplicar novas perturbações.
+
+---
+
+## Fluxo de Build Multiplataforma
+
+### Etapas Comuns (Windows e Linux)
+
+1. **Limpeza de artefatos antigos**
+   - Remove executáveis e objetos compilados anteriormente
+   - Prepara ambiente limpo para novo build
+
+2. **Preparação de diretórios**
+   - Cria `bin/` para executáveis
+   - Cria `logs/` para logs do Gurobi
+   - Usa `std::filesystem` (C++17) para compatibilidade
+
+3. **Configuração do Gurobi**
+   - **Windows**: `C:\gurobi1202\win64` (padrão)
+   - **Linux**: `/opt/gurobi1202/linux64` (padrão)
+   - Paths podem ser customizados via `GUROBI_HOME`
+
+4. **Compilação dos arquivos-fonte** (9 arquivos)
+   - Configuration.cpp
+   - Graph.cpp
+   - Input.cpp
+   - MHCP.cpp (contém main)
+   - Node.cpp
+   - Output.cpp
+   - Rand.cpp
+   - Robot.cpp
+   - Solution.cpp
+
+5. **Linkagem com Gurobi**
+   - **Windows**: `gurobi_c++mt2017.lib` + `gurobi120.lib`
+   - **Linux**: `libgurobi_c++.a` + `libgurobi120.so` + `pthread` + `m`
+
+6. **Geração do executável**
+   - **Windows**: `bin/main.exe`
+   - **Linux**: `bin/main`
+
+7. **Logs e organização**
+   - Logs do Gurobi movidos para `logs/` com timestamp
+   - Estrutura de diretórios idêntica em ambas plataformas
+
+### Etapas Específicas por Plataforma
+
+#### Windows (MSVC)
+- Inicialização do ambiente MSVC via `vcvars64.bat`
+- Flags: `/EHsc` (exceções), `/std:c++17`, `/Zi` (debug)
+- Script automatizado: `.vscode\build.bat`
+- Pode executar automaticamente após build
+
+#### Linux (GCC/Clang)
+- Flags: `-std=c++17`, `-Wall -Wextra`, `-O2/-O3` (otimização)
+- Build via CMake (recomendado): `cmake .. && make -j$(nproc)`
+- Requer configuração de `LD_LIBRARY_PATH` para Gurobi
+- Linkagem explícita com `-lpthread -lm`
+
+### Diagrama de Build Simplificado
+
+```
+┌─────────────────────────────────────────┐
+│   Código-fonte C++17 (multiplataforma)  │
+└──────────────┬──────────────────────────┘
+               │
+       ┌───────┴───────┐
+       │               │
+┌──────▼──────┐  ┌────▼─────┐
+│   Windows   │  │  Linux   │
+│    MSVC     │  │ GCC/Clang│
+└──────┬──────┘  └────┬─────┘
+       │               │
+       │  Compilação  │
+       │   C++17      │
+       │               │
+┌──────▼──────┐  ┌────▼─────┐
+│ Gurobi libs │  │Gurobi libs│
+│   (.lib)    │  │ (.so/.a)  │
+└──────┬──────┘  └────┬─────┘
+       │               │
+       │  Linkagem    │
+       │               │
+┌──────▼──────┐  ┌────▼─────┐
+│ bin/main.exe│  │bin/main  │
+└─────────────┘  └──────────┘
+       │               │
+       └───────┬───────┘
+               │
+      ┌────────▼─────────┐
+      │   Execução       │
+      │   (idêntica)     │
+      └──────────────────┘
+               │
+      ┌────────▼─────────┐
+      │  output/ + logs/ │
+      │  (multiplataforma)│
+      └──────────────────┘
+```
+
+---
+
+## Pontos de Atenção Multiplataforma
+
+### Compatibilidade Total
+- ✅ Código-fonte C++ (100% padrão C++17)
+- ✅ Arquivos de entrada/saída
+- ✅ Estrutura de diretórios (`std::filesystem`)
+- ✅ Lógica do algoritmo VNS/VND
+- ✅ Integração com Gurobi
+
+### Diferenças Gerenciadas
+- ⚙️ Nome do executável (`main.exe` vs `main`)
+- ⚙️ Bibliotecas Gurobi (`.lib` vs `.so/.a`)
+- ⚙️ Flags de compilação (MSVC vs GCC/Clang)
+- ⚙️ Variáveis de ambiente Linux (`LD_LIBRARY_PATH`)
+
+### Arquivos de Saída
+- 📁 Estrutura de `output/` idêntica
+- 📁 Logs do Gurobi com mesmo formato
+- 📁 Separadores de caminho normalizados por `std::filesystem`
+
+---
 

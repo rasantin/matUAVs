@@ -2,14 +2,19 @@
 
 ## Descrição do Projeto
 
-O matUAVs é um projeto acadêmico focado no planejamento e otimização de rotas para Veículos Aéreos Não Tripulados (UAVs). O objetivo é encontrar rotas viáveis e eficientes sob restrições operacionais — com destaque para limites de combustível — utilizando técnicas de otimização com Gurobi e heurísticas em C++17.
+Descrição do Projeto
 
-A abordagem combina:
-- Modelagem do problema em grafos (nós, arestas, custos e restrições);
-- Otimização com Gurobi para resolver subproblemas estruturados;
-- Heurísticas para melhorar a qualidade das soluções e reduzir tempo de execução.
+O matUAVs é um projeto acadêmico resultante do meu doutorado, focado no planejamento e otimização de rotas para frotas heterogêneas de Veículos Aéreos Não Tripulados (UAVs) em missões de cobertura completa de áreas. O objetivo é gerar rotas viáveis e eficientes sob restrições operacionais, considerando explicitamente a autonomia dos veículos e a localização de estações de recarga.
 
-O projeto foi organizado para oferecer uma experiência de build e execução simples no Windows (x64), com tarefas automatizadas que cuidam desde a limpeza do ambiente até a geração de logs.
+A solução adota uma abordagem matheurística multiobjetivo, combinando metaheurísticas (MOVNS) com métodos exatos baseados em Programação Inteira Mista (MILP), resolvidos com Gurobi, para explorar soluções não dominadas que equilibram o tempo total da missão e o número de estações de recarga, com melhor eficiência computacional.
+
+A abordagem integra:
+
+  - Modelagem do problema em grafos (nós, arestas, custos e restrições de autonomia);
+  - Formulações MILP para decisões conjuntas de roteamento e recarga;
+  - Matheurísticas multiobjetivo que utilizam métodos exatos como operadores de rota no processo de busca.
+    
+O projeto foi estruturado para facilitar o build e a execução em ambientes Windows e Linux, com tarefas automatizadas que cobrem desde a preparação do ambiente até a execução dos experimentos e a geração de logs.
 
 ---
 

@@ -18,58 +18,12 @@ A abordagem integra:
 
 ## Pipeline de Build e Execução
 
-O projeto suporta dois métodos de build:
+O CMake é o método canônico de build deste projeto, suportando Windows e Linux de forma consistente.
 
-### Método 1: CMake (Recomendado - Multiplataforma)
+### Método: CMake 
 - Funciona em **Windows** e **Linux**
-- Configuração automática de dependências
-- Build otimizado para cada plataforma
-
-### Método 2: Script Windows (build.bat)
-- Específico para Windows com MSVC
-- Build direto sem necessidade de CMake
-
----
-
-### Pipeline de Build Windows (MSVC + build.bat)
-
-O script `.vscode/build.bat` executa 7 etapas principais:
-
-### 🧹 1) Limpeza
-- Remove executáveis e objetos antigos (`*.exe`, `*.obj`, `*.pdb`);
-- Garante um build limpo e sem conflitos.
-
-### 📁 2) Preparação
-- Cria os diretórios `bin/` e `logs/`;
-- Inicializa o ambiente MSVC 64-bit.
-
-### 🔗 3) Configuração do Gurobi
-- Define os caminhos (paths) para a instalação do Gurobi;
-- Configura as bibliotecas `gurobi_c++mt2017.lib` e `gurobi120.lib` para linkagem.
-
-### ⚙️ 4) Compilação (C++17)
-Compila individualmente 9 arquivos-fonte:
-- `Configuration.cpp` — Configurações do sistema;
-- `Graph.cpp` — Estruturas e operações em grafos;
-- `Input.cpp` — Processamento de dados de entrada;
-- `MHCP.cpp` — Programa principal (contém `main()`);
-- `Node.cpp` — Representação de nós do grafo;
-- `Output.cpp` — Geração e formatação de resultados;
-- `Rand.cpp` — Geração de números aleatórios;
-- `Robot.cpp` — Lógica dos UAVs/robôs;
-- `Solution.cpp` — Métodos de construção e melhoria de soluções.
-
-### 🔗 5) Linkagem
-- Une todos os objetos e gera `bin/main.exe`;
-- Realiza a linkagem com as bibliotecas do Gurobi.
-
-### ▶️ 6) Execução Automática
-- Executa `main.exe` ao final do build;
-- Processa os dados de entrada e produz as soluções correspondentes.
-
-### 📊 7) Gerenciamento de Logs
-- Move os logs do Gurobi para `logs/` com timestamp;
-- Organiza saídas para análise posterior.
+- Independente de IDE
+- Facilita builds reproduzíveis e automação de experimentos
 
 ---
 
@@ -79,11 +33,6 @@ Compila individualmente 9 arquivos-fonte:
 
 #### Via VS Code (recomendado):
 - Pressione: `Ctrl+Shift+P` → "Tasks: Run Build Task"
-
-#### Via script batch:
-```cmd
-.vscode\build.bat
-```
 
 #### Via CMake:
 ```cmd

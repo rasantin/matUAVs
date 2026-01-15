@@ -2,12 +2,9 @@
 
 ## Visão Geral
 
-O projeto matUAVs utiliza **C++17** e pode ser compilado em **Windows (x64)** e **Linux (x64)**. Duas abordagens de build estão disponíveis:
+O projeto matUAVs utiliza **C++17** e pode ser compilado em **Windows (x64)** e **Linux (x64)**. O sistema de build canônico é o **CMake**, que garante consistência e portabilidade entre plataformas.
 
-1. **CMake** (recomendado, multiplataforma)
-2. **Script nativo** (build.bat para Windows com MSVC)
-
-Ambas as abordagens integram a biblioteca de otimização **Gurobi** para resolver os modelos MILP.
+O CMake integra automaticamente a biblioteca de otimização **Gurobi** para resolver os modelos MILP.
 
 ---
 
@@ -15,7 +12,7 @@ Ambas as abordagens integram a biblioteca de otimização **Gurobi** para resolv
 
 ### Windows
 - **Compilador**: Microsoft Visual C++ 2022 BuildTools ou Visual Studio 2022
-- **CMake**: 3.20 ou superior (opcional, se usar CMake)
+- **CMake**: 3.20 ou superior
 - **Gurobi**: Versão 12.0+ instalado em `C:\gurobi1202\win64` (ou outro caminho configurável)
 - **Arquitetura**: x64
 
@@ -28,7 +25,7 @@ Ambas as abordagens integram a biblioteca de otimização **Gurobi** para resolv
 
 ---
 
-## Método 1: Compilação com CMake (Multiplataforma)
+## Compilação com CMake
 
 ### Configuração do Gurobi
 
@@ -102,131 +99,21 @@ make -j$(nproc)
 
 ---
 
-## Método 2: Compilação com Script Windows (build.bat)
-
-Este método é específico para Windows e utiliza diretamente o compilador MSVC sem necessidade de CMake.
-
-### Pré-requisitos Específicos
-- Microsoft Visual C++ 2022 BuildTools instalado em:
-  `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\`
-- Gurobi instalado em: `C:\gurobi1202\win64\`
-
-### Execução do Script
-
-#### Via VS Code (Recomendado)
-1. Abra o projeto no VS Code
-2. Pressione `Ctrl+Shift+P`
-3. Digite: "Tasks: Run Build Task"
-4. O programa será compilado e executado automaticamente
-
-#### Via Linha de Comando
-```cmd
-.vscode\build.bat
-```
-
-### O que o Script Faz
-
-### O que o Script Faz
-
-O script `build.bat` executa as seguintes etapas automatizadas:
-
-#### 1. Limpeza de Arquivos Antigos
-```batch
-del /q bin\main.exe
-del /q bin\*.obj
-del /q bin\*.pdb
-del /q bin\*.ilk
-del /q bin\*.lib
-del /q bin\*.exp
-```
-- Remove executáveis e objetos compilados anteriormente
-- Garante um build limpo sem conflitos de versões
-
-#### 2. Preparação do Ambiente
-```batch
-if not exist bin mkdir bin
-if not exist logs mkdir logs
-call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
-```
-- Cria diretórios necessários (`bin/` e `logs/`)
-- Inicializa o ambiente do compilador MSVC para 64-bit
-
-#### 3. Configuração das Bibliotecas Gurobi
-```batch
-set GUROBI_INC=C:\gurobi1202\win64\include
-set GUROBI_LIB=C:\gurobi1202\win64\lib
-set GUROBI_LIBS=%GUROBI_LIB%\gurobi_c++mt2017.lib %GUROBI_LIB%\gurobi120.lib
-```
-- Define caminhos para headers e bibliotecas do Gurobi
-- Especifica as bibliotecas necessárias para otimização
-
-#### 4. Compilação Individual dos Arquivos Fonte
-```batch
-for %%f in (src\*.cpp) do (
-    cl /c /Fo:bin\%%~nf.obj /EHsc /std:c++17 /I %GUROBI_INC% /Zi %%f
-)
-```
-**Parâmetros de Compilação:**
-- `/c` - Compila sem linkar
-- `/Fo:bin\%%~nf.obj` - Define o nome e local do arquivo objeto
-- `/EHsc` - Habilita tratamento de exceções C++
-- `/std:c++17` - Usa o padrão C++17
-- `/I %GUROBI_INC%` - Inclui headers do Gurobi
-- `/Zi` - Gera informações de debug
-
-**Arquivos Compilados:**
-- `Configuration.cpp` → `bin/Configuration.obj`
-- `Graph.cpp` → `bin/Graph.obj`
-- `Input.cpp` → `bin/Input.obj`
-- `MHCP.cpp` → `bin/MHCP.obj` (contém a função main)
-- `Node.cpp` → `bin/Node.obj`
-- `Output.cpp` → `bin/Output.obj`
-- `Rand.cpp` → `bin/Rand.obj`
-- `Robot.cpp` → `bin/Robot.obj`
-- `Solution.cpp` → `bin/Solution.obj`
-
-#### 5. Linkagem do Executável
-```batch
-link !OBJS! %GUROBI_LIBS% /OUT:bin\main.exe /DEBUG
-```
-- Combina todos os arquivos objeto em um executável
-- Linka com as bibliotecas do Gurobi
-- Gera `bin/main.exe` com informações de debug
-
-#### 6. Execução Automática
-```batch
-bin\main.exe
-```
-- Executa o programa compilado automaticamente
-- Processa dados de entrada e gera soluções de otimização
-
-#### 7. Gerenciamento de Logs
-```batch
-if exist gurobi.log (
-    move /Y gurobi.log logs\gurobi_%timestamp%.log
-)
-```
-- Move logs do Gurobi para pasta organizada
-- Adiciona timestamp para controle de versões
-
----
-
 ## Detalhes Técnicos por Plataforma
 
 ### Windows (MSVC)
 
 **Compilador**: Microsoft Visual C++ 2022
-**Flags de compilação**:
-- `/c` - Compilação sem linkagem
+**Flags de compilação** (via CMake):
 - `/EHsc` - Tratamento de exceções C++
 - `/std:c++17` - Padrão C++17
-- `/Zi` - Informações de debug
+- `/W3` - Avisos do compilador
 
 **Bibliotecas Gurobi**:
 - `gurobi_c++mt2017.lib` - Interface C++ multi-threaded
 - `gurobi120.lib` - Biblioteca principal do Gurobi
 
-**Executável gerado**: `bin/main.exe`
+**Executável gerado**: `bin/Release/matUAVs.exe` ou `bin/Debug/matUAVs.exe`
 
 ### Linux (GCC/Clang)
 
@@ -234,7 +121,7 @@ if exist gurobi.log (
 - GCC 8 ou superior
 - Clang 7 ou superior
 
-**Flags de compilação**:
+**Flags de compilação** (via CMake):
 - `-std=c++17` - Padrão C++17
 - `-Wall -Wextra` - Avisos do compilador
 - `-O2` ou `-O3` - Otimização (modo Release)
@@ -247,7 +134,7 @@ if exist gurobi.log (
 - `pthread` - Suporte a threads POSIX
 - `m` - Biblioteca matemática
 
-**Executável gerado**: `bin/main`
+**Executável gerado**: `bin/matUAVs`
 
 ---
 
@@ -256,10 +143,10 @@ if exist gurobi.log (
 | Aspecto | Windows | Linux |
 |---------|---------|-------|
 | **Compilador** | MSVC (Visual Studio) | GCC 8+ ou Clang 7+ |
-| **Executável** | `main.exe` | `main` |
+| **Executável** | `matUAVs.exe` | `matUAVs` |
 | **Libs Gurobi** | `.lib` (estáticas) | `.so` (dinâmicas) + `.a` |
 | **Separador de caminho** | `\` (mas `/` também funciona) | `/` |
-| **Build script nativo** | `.vscode\build.bat` | Makefile ou CMake |
+| **Build system** | CMake | CMake |
 | **Bibliotecas do sistema** | Incluídas automaticamente | Requer `-lpthread -lm` |
 
 **Nota importante**: O código-fonte C++ é 100% compatível entre plataformas, utilizando apenas recursos padrão do C++17.
@@ -292,7 +179,7 @@ matUAVs/
 **Windows:**
 1. Verificar instalação em `C:\gurobi1202\win64`
 2. Confirmar licença ativa do Gurobi
-3. Se instalado em outro local, editar paths no `build.bat` ou definir `GUROBI_HOME`
+3. Se instalado em outro local, definir `GUROBI_HOME` antes de executar CMake
 
 **Linux:**
 1. Verificar instalação em `/opt/gurobi1202/linux64`
@@ -313,8 +200,8 @@ matUAVs/
 
 **Solução**:
 1. Verificar se o Gurobi está instalado corretamente
-2. Usar "Developer Command Prompt for VS 2022"
-3. Ou executar `vcvars64.bat` antes de compilar
+2. Executar CMake em "Developer Command Prompt for VS 2022"
+3. Ou usar "x64 Native Tools Command Prompt" do Visual Studio
 
 ### Linux: "error while loading shared libraries: libgurobi120.so"
 
@@ -333,7 +220,7 @@ Ou adicione ao `~/.bashrc` para tornar permanente.
 
 **Solução**:
 ```bash
-chmod +x bin/main
+chmod +x build/bin/matUAVs
 ```
 
 ---
@@ -345,24 +232,24 @@ Para verificar se a compilação foi bem-sucedida:
 ### Windows
 ```cmd
 # Verificar se o executável foi gerado
-dir bin\main.exe
+dir build\bin\Release\matUAVs.exe
 
 # Executar
-bin\main.exe input.txt
+build\bin\Release\matUAVs.exe input.txt
 ```
 
 ### Linux
 ```bash
 # Verificar se o executável foi gerado
-ls -lh bin/main
+ls -lh build/bin/matUAVs
 
 # Executar
-./bin/main input.txt
+./build/bin/matUAVs input.txt
 ```
 
 **Saída esperada:**
 ```
-Program: main
+Program: matUAVs
 Start Reading: input.txt
 Node Information:
 Base nodes: 1
@@ -385,8 +272,12 @@ O projeto inclui configurações do VS Code para facilitar o desenvolvimento:
 - Define padrão C++17 e paths de inclusão
 
 #### `.vscode/tasks.json`
-- Define tarefa de build que executa `build.bat` (Windows)
+- Define tarefa de build usando CMake
 - Configurada como tarefa padrão do projeto
+
+#### `.vscode/launch.json`
+- Configurações de debug para Windows e Linux
+- Suporte a debugging com VS Code e WSL
 
 ### Como Usar no VS Code
 
@@ -398,18 +289,17 @@ O projeto inclui configurações do VS Code para facilitar o desenvolvimento:
 
 ## Resultado da Compilação
 
-O processo gera os seguintes arquivos:
+O processo CMake gera os seguintes arquivos:
 
 **Windows:**
-- **Executável**: `bin/main.exe`
-- **Objetos**: `bin/*.obj`
-- **Logs**: `logs/gurobi_*.log`
-- **Debug Info**: `.pdb`, `.ilk` files
+- **Executável**: `build/bin/Release/matUAVs.exe` ou `build/bin/Debug/matUAVs.exe`
+- **Objetos**: arquivos intermediários em `build/`
+- **Logs**: `logs/gurobi_*.log` (após execução)
 
 **Linux:**
-- **Executável**: `bin/main`
-- **Objetos**: `bin/*.o`
-- **Logs**: `logs/gurobi_*.log`
+- **Executável**: `build/bin/matUAVs`
+- **Objetos**: arquivos intermediários em `build/`
+- **Logs**: `logs/gurobi_*.log` (após execução)
 
 ---
 

@@ -165,26 +165,27 @@ Este comportamento implementa uma estratégia de **intensificação local mais a
    - **Linux**: `libgurobi_c++.a` + `libgurobi120.so` + `pthread` + `m`
 
 6. **Geração do executável**
-   - **Windows**: `bin/main.exe`
-   - **Linux**: `bin/main`
+   - **Windows**: `build/bin/Release/matUAVs.exe` (ou `Debug/matUAVs.exe`)
+   - **Linux**: `build/bin/matUAVs`
 
 7. **Logs e organização**
-   - Logs do Gurobi movidos para `logs/` com timestamp
-   - Estrutura de diretórios idêntica em ambas plataformas
+   - Logs do Gurobi gerados durante execução em `logs/` com timestamp
+   - Estrutura de build consistente via CMake
 
 ### Etapas Específicas por Plataforma
 
 #### Windows (MSVC)
-- Inicialização do ambiente MSVC via `vcvars64.bat`
-- Flags: `/EHsc` (exceções), `/std:c++17`, `/Zi` (debug)
-- Script automatizado: `.vscode\build.bat`
-- Pode executar automaticamente após build
+- CMake detecta ambiente MSVC automaticamente
+- Flags configuradas via CMake: `/EHsc` (exceções), `/std:c++17`, `/W3`
+- Build via VS Code: `Ctrl+Shift+B` ou via CMake diretamente
+- Gera executável em `build/bin/Release/matUAVs.exe`
 
 #### Linux (GCC/Clang)
-- Flags: `-std=c++17`, `-Wall -Wextra`, `-O2/-O3` (otimização)
-- Build via CMake (recomendado): `cmake .. && make -j$(nproc)`
+- Flags configuradas via CMake: `-std=c++17`, `-Wall -Wextra`, `-O2/-O3`
+- Build via CMake: `cmake .. && make -j$(nproc)`
 - Requer configuração de `LD_LIBRARY_PATH` para Gurobi
-- Linkagem explícita com `-lpthread -lm`
+- Linkagem explícita com `-lpthread -lm` gerenciada pelo CMake
+- Gera executável em `build/bin/matUAVs`
 
 ### Diagrama de Build Simplificado
 
@@ -211,7 +212,8 @@ Este comportamento implementa uma estratégia de **intensificação local mais a
        │  Linkagem    │
        │               │
 ┌──────▼──────┐  ┌────▼─────┐
-│ bin/main.exe│  │bin/main  │
+│build/bin/   │  │build/bin/│
+│matUAVs.exe  │  │matUAVs   │
 └─────────────┘  └──────────┘
        │               │
        └───────┬───────┘

@@ -33,17 +33,12 @@ Este documento detalha o fluxo completo de execução do projeto matUAVs, desde 
 
 #### Windows
 
-**Opção 1: Via VS Code (Recomendado)**
+**Via VS Code (Recomendado)**
 ```
 Ctrl+Shift+P → "Tasks: Run Build Task"
 ```
 
-**Opção 2: Via Script Batch**
-```cmd
-.vscode\build.bat
-```
-
-**Opção 3: Via CMake**
+**Via CMake (Linha de Comando)**
 ```cmd
 mkdir build && cd build
 cmake .. -G "Visual Studio 17 2022" -A x64
@@ -59,17 +54,16 @@ cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(nproc)
 ```
 
-### Etapas Automatizadas do Build
+### Etapas do Build com CMake
 
-O processo de build executa as seguintes etapas (em ambos os sistemas):
+O processo de build CMake executa as seguintes etapas (em ambos os sistemas):
 
-1. **Limpeza** - Remove executáveis e objetos antigos
-2. **Preparação** - Cria diretórios `bin/` e `logs/`
-3. **Configuração Gurobi** - Define paths e bibliotecas
+1. **Configuração** - CMake detecta compilador e configura o projeto
+2. **Detecção de Gurobi** - Localiza bibliotecas do Gurobi via `GUROBI_HOME`
+3. **Geração de Build Files** - Cria makefiles ou projetos Visual Studio
 4. **Compilação** - Compila 9 arquivos C++17 individuais
-5. **Linkagem** - Gera executável (`main.exe` no Windows, `main` no Linux)
-6. **Execução** - Pode executar automaticamente o programa (no script Windows)
-7. **Logs** - Organiza logs do Gurobi com timestamp
+5. **Linkagem** - Gera executável (`matUAVs.exe` no Windows, `matUAVs` no Linux)
+6. **Organização** - Coloca executável em `build/bin/`
 
 ---
 
@@ -273,27 +267,31 @@ Robot_3 (Config_1): Vel=15, Fuel=1200
 #### Windows
 ```cmd
 # 1. Compilar projeto
-.vscode\build.bat
+mkdir build && cd build
+cmake .. -G "Visual Studio 17 2022" -A x64
+cmake --build . --config Release
+cd ..
 
 # 2. Executar com arquivo padrão
-bin\main.exe input.txt
+build\bin\Release\matUAVs.exe input.txt
 
 # 3. Executar com arquivo personalizado
-bin\main.exe meu_cenario.txt
+build\bin\Release\matUAVs.exe meu_cenario.txt
 ```
 
 #### Linux
 ```bash
 # 1. Compilar projeto
 mkdir build && cd build
-cmake .. && make -j$(nproc)
+cmake .. -DCMAKE_BUILD_TYPE=Release
+make -j$(nproc)
 cd ..
 
 # 2. Executar com arquivo padrão
-./bin/main input.txt
+./build/bin/matUAVs input.txt
 
 # 3. Executar com arquivo personalizado
-./bin/main meu_cenario.txt
+./build/bin/matUAVs meu_cenario.txt
 ```
 
 ### Modificando Parâmetros

@@ -29,17 +29,21 @@
    code .
    ```
 
-2. **Compilar e Executar**
+2. **Compilar via VS Code**
    ```
    Ctrl+Shift+P → "Tasks: Run Build Task"
    ```
-   ou
+   ou **via CMake**:
    ```cmd
-   .vscode\build.bat
+   mkdir build && cd build
+   cmake .. -G "Visual Studio 17 2022" -A x64
+   cmake --build . --config Release
    ```
 
-3. **Aguardar Resultados**
-   - O programa executa automaticamente após a compilação
+3. **Executar e Aguardar Resultados**
+   ```cmd
+   build\bin\Release\matUAVs.exe input.txt
+   ```
    - Resultados aparecem em `output/`
 
 #### Linux
@@ -60,7 +64,7 @@
 
 3. **Executar e Aguardar Resultados**
    ```bash
-   ./bin/main input.txt
+   ./build/bin/matUAVs input.txt
    ```
    - Resultados aparecem em `output/`
 
@@ -140,20 +144,20 @@ cvl_subset:2
 
 #### Windows
 ```cmd
-# Usar arquivo input.txt padrão
-bin\main.exe
+# Usar arquivo input.txt padrão (após build)
+build\bin\Release\matUAVs.exe
 
 # Ou especificar explicitamente
-bin\main.exe input.txt
+build\bin\Release\matUAVs.exe input.txt
 ```
 
 #### Linux
 ```bash
-# Usar arquivo input.txt padrão
-./bin/main
+# Usar arquivo input.txt padrão (após build)
+./build/bin/matUAVs
 
 # Ou especificar explicitamente
-./bin/main input.txt
+./build/bin/matUAVs input.txt
 ```
 
 ### 2. Execução com Arquivo Personalizado
@@ -161,19 +165,19 @@ bin\main.exe input.txt
 #### Windows
 ```cmd
 # Especificar arquivo customizado
-bin\main.exe meu_cenario.txt
+build\bin\Release\matUAVs.exe meu_cenario.txt
 ```
 
 #### Linux
 ```bash
 # Especificar arquivo customizado
-./bin/main meu_cenario.txt
+./build/bin/matUAVs meu_cenario.txt
 ```
 
 ### 3. Execução via VS Code
-- **F5**: Debug mode (requer configuração de launch.json)
+- **F5**: Debug mode (usa configurações em `.vscode/launch.json`)
 - **Ctrl+F5**: Run sem debug
-- **Ctrl+Shift+P**: Build Task (compila e pode executar)
+- **Ctrl+Shift+B**: Build com CMake
 
 ---
 
@@ -281,31 +285,32 @@ ERRO: Gurobi não encontrado
 **Solução**:
 1. Verificar instalação do Gurobi em `C:\gurobi1202\win64`
 2. Confirmar licença ativa
-3. Atualizar paths no `build.bat` se instalado em local diferente
-4. Ou definir variável de ambiente:
+3. Definir variável de ambiente antes de executar CMake:
    ```cmd
    set GUROBI_HOME=C:\gurobi1202\win64
    ```
+4. Reconfigurar e compilar com CMake
 
 #### Problema: LINK error LNK1181
 ```
 LINK : fatal error LNK1181: cannot open input file 'gurobi120.lib'
 ```
 **Solução**:
-1. Usar "Developer Command Prompt for VS 2022"
-2. Ou executar antes da compilação:
+1. Executar CMake em "Developer Command Prompt for VS 2022"
+2. Ou configurar ambiente antes:
    ```cmd
    call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+   cmake .. -G "Visual Studio 17 2022" -A x64
    ```
 
 #### Problema: Executável não encontrado
 ```
-'bin\main.exe' não é reconhecido como um comando interno
+'build\bin\Release\matUAVs.exe' não é reconhecido como um comando interno
 ```
 **Solução**:
-1. Verificar se a compilação foi bem-sucedida
+1. Verificar se a compilação CMake foi bem-sucedida
 2. Executar de dentro do diretório do projeto
-3. Ou usar caminho completo
+3. Verificar se está usando o caminho correto: `build\bin\Release\matUAVs.exe`
 
 ---
 
@@ -360,12 +365,12 @@ error: 'filesystem' in namespace 'std' does not name a type
 
 #### Problema: Permissão negada ao executar
 ```
-bash: ./bin/main: Permission denied
+bash: ./build/bin/matUAVs: Permission denied
 ```
 **Solução**:
 ```bash
-chmod +x bin/main
-./bin/main input.txt
+chmod +x build/bin/matUAVs
+./build/bin/matUAVs input.txt
 ```
 
 ---
@@ -416,13 +421,13 @@ Error reading input file
 #### Windows
 ```cmd
 # Cenário mínimo para validar mudanças
-bin\main.exe input_test_minimal.txt
+build\bin\Release\matUAVs.exe input_test_minimal.txt
 ```
 
 #### Linux
 ```bash
 # Cenário mínimo para validar mudanças
-./bin/main input_test_minimal.txt
+./build/bin/matUAVs input_test_minimal.txt
 ```
 
 ### 2. Análise de Performance
@@ -430,13 +435,13 @@ bin\main.exe input_test_minimal.txt
 #### Windows
 ```cmd
 # Múltiplas execuções para estatísticas
-bin\main.exe input_performance.txt
+build\bin\Release\matUAVs.exe input_performance.txt
 ```
 
 #### Linux
 ```bash
 # Múltiplas execuções para estatísticas
-./bin/main input_performance.txt
+./build/bin/matUAVs input_performance.txt
 ```
 
 ### 3. Validação de Algoritmo
@@ -444,13 +449,13 @@ bin\main.exe input_performance.txt
 #### Windows
 ```cmd
 # Cenário conhecido com resultado esperado
-bin\main.exe input_validation.txt
+build\bin\Release\matUAVs.exe input_validation.txt
 ```
 
 #### Linux
 ```bash
 # Cenário conhecido com resultado esperado
-./bin/main input_validation.txt
+./build/bin/matUAVs input_validation.txt
 ```
 
 ### 4. Produção Final
@@ -458,13 +463,13 @@ bin\main.exe input_validation.txt
 #### Windows
 ```cmd
 # Configuração otimizada para resultado final
-bin\main.exe input_production.txt
+build\bin\Release\matUAVs.exe input_production.txt
 ```
 
 #### Linux
 ```bash
 # Configuração otimizada para resultado final
-./bin/main input_production.txt
+./build/bin/matUAVs input_production.txt
 ```
 
 ---
@@ -567,13 +572,13 @@ cvl_subset:4
 
 | Aspecto | Windows | Linux |
 |---------|---------|-------|
-| **Executável** | `bin\main.exe` | `./bin/main` |
+| **Executável** | `build\bin\Release\matUAVs.exe` | `./build/bin/matUAVs` |
 | **Separador de caminho** | `\` (mas `/` funciona) | `/` |
-| **Build recomendado** | Script `.vscode\build.bat` ou CMake | CMake |
+| **Build system** | CMake | CMake |
 | **Variáveis de ambiente** | Opcionais | `LD_LIBRARY_PATH` necessária |
 | **Permissões de arquivo** | Automáticas | Pode precisar `chmod +x` |
 
-**Importante**: O código C++ e os arquivos de entrada/saída são 100% compatíveis entre plataformas.
+**Importante**: O código C++ e os arquivos de entrada/saída são 100% compatíveis entre plataformas. CMake é o sistema de build canônico para ambas.
 
 ---
 

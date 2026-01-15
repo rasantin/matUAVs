@@ -1,7 +1,7 @@
 # Fluxo de Execução do Projeto matUAVs
 
 ## Visão Geral
-Este documento detalha o fluxo completo de execução do projeto matUAVs, desde a preparação dos dados de entrada até a geração dos resultados de otimização de roteamento de UAVs.
+Este documento detalha o fluxo completo de execução do projeto matUAVs, desde a preparação dos dados de entrada até a geração dos resultados de otimização de roteamento de UAVs. O fluxo descrito é válido para **Windows (x64)** e **Linux (x64)**.
 
 ## 📋 Índice
 1. [Preparação do Ambiente](#preparação-do-ambiente)
@@ -16,28 +16,54 @@ Este documento detalha o fluxo completo de execução do projeto matUAVs, desde 
 ## 🛠️ Preparação do Ambiente
 
 ### Pré-requisitos
-- Windows x64
-- Microsoft Visual C++ 2022 BuildTools
-- Gurobi Optimizer 12.02
+
+#### Windows (x64)
+- Microsoft Visual C++ 2022 BuildTools ou Visual Studio 2022
+- Gurobi Optimizer 12.0+
+- CMake 3.20+ (opcional, se usar CMake)
 - Visual Studio Code (recomendado)
 
-### Processo de Build
-```batch
-# Via VS Code (Recomendado)
-Ctrl+Shift+P → "Tasks: Run Build Task"
+#### Linux (x64)
+- GCC 8+ ou Clang 7+
+- Gurobi Optimizer 12.0+
+- CMake 3.20+
+- Bibliotecas: pthread, libm
 
-# Via linha de comando
-.vscode\build.bat
+### Processo de Build
+
+#### Windows
+
+**Via VS Code (Recomendado)**
+```
+Ctrl+Shift+P → "Tasks: Run Build Task"
 ```
 
-O processo executa 7 etapas automatizadas:
-1. **Limpeza** - Remove executáveis e objetos antigos
-2. **Preparação** - Cria diretórios `bin/` e `logs/`
-3. **Configuração Gurobi** - Define paths e bibliotecas
+**Via CMake (Linha de Comando)**
+```cmd
+mkdir build && cd build
+cmake .. -G "Visual Studio 17 2022" -A x64
+cmake --build . --config Release
+```
+
+#### Linux
+
+**Via CMake**
+```bash
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+make -j$(nproc)
+```
+
+### Etapas do Build com CMake
+
+O processo de build CMake executa as seguintes etapas (em ambos os sistemas):
+
+1. **Configuração** - CMake detecta compilador e configura o projeto
+2. **Detecção de Gurobi** - Localiza bibliotecas do Gurobi via `GUROBI_HOME`
+3. **Geração de Build Files** - Cria makefiles ou projetos Visual Studio
 4. **Compilação** - Compila 9 arquivos C++17 individuais
-5. **Linkagem** - Gera `bin/main.exe`
-6. **Execução** - Executa automaticamente o programa
-7. **Logs** - Organiza logs do Gurobi com timestamp
+5. **Linkagem** - Gera executável (`matUAVs.exe` no Windows, `matUAVs` no Linux)
+6. **Organização** - Coloca executável em `build/bin/`
 
 ---
 
@@ -194,6 +220,9 @@ s.print_paretoSet();    // Exibe Pareto Front
 ## 📊 Geração de Resultados
 
 ### Estrutura de Saída
+
+A estrutura de diretórios de saída é criada automaticamente em ambas as plataformas usando `std::filesystem` (C++17):
+
 ```
 output/
 ├── <timestamp>/
@@ -203,8 +232,11 @@ output/
 │       ├── sol_1/             # Solução 1
 │       ├── sol_2/             # Solução 2
 │       └── ...
-└── gurobi_<timestamp>.log     # Logs do Gurobi
+└── logs/
+    └── gurobi_<timestamp>.log # Logs do Gurobi
 ```
+
+**Nota sobre separadores de caminho**: O C++17 `std::filesystem` normaliza automaticamente os separadores de caminho (`/` e `\`), garantindo compatibilidade entre Windows e Linux.
 
 ### Informações Geradas
 - **Nós**: Coordenadas e tipos (base, target, depot)
@@ -231,15 +263,35 @@ Robot_3 (Config_1): Vel=15, Fuel=1200
 ## 🚀 Exemplos Práticos
 
 ### Execução Básica
-```bash
+
+#### Windows
+```cmd
 # 1. Compilar projeto
-.vscode\build.bat
+mkdir build && cd build
+cmake .. -G "Visual Studio 17 2022" -A x64
+cmake --build . --config Release
+cd ..
 
 # 2. Executar com arquivo padrão
-bin\main.exe input.txt
+build\bin\Release\matUAVs.exe input.txt
 
 # 3. Executar com arquivo personalizado
-bin\main.exe meu_cenario.txt
+build\bin\Release\matUAVs.exe meu_cenario.txt
+```
+
+#### Linux
+```bash
+# 1. Compilar projeto
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+make -j$(nproc)
+cd ..
+
+# 2. Executar com arquivo padrão
+./build/bin/matUAVs input.txt
+
+# 3. Executar com arquivo personalizado
+./build/bin/matUAVs meu_cenario.txt
 ```
 
 ### Modificando Parâmetros
@@ -296,9 +348,48 @@ configId:Config_Economico
 - **Feasibilidade**: Respeito às restrições de combustível
 
 ### Troubleshooting
-- **Erro de compilação**: Verificar instalação do Gurobi
-- **Solução inviável**: Ajustar parâmetros de combustível
-- **Performance lenta**: Reduzir número de targets ou robôs
+
+#### Erro de compilação
+
+**Windows:**
+- Verificar instalação do Gurobi em `C:\gurobi1202\win64`
+- Confirmar que o MSVC 2022 está instalado
+- Usar "Developer Command Prompt for VS 2022"
+
+**Linux:**
+- Verificar instalação do Gurobi em `/opt/gurobi1202/linux64`
+- Definir `LD_LIBRARY_PATH`:
+  ```bash
+  export LD_LIBRARY_PATH=/opt/gurobi1202/linux64/lib:$LD_LIBRARY_PATH
+  ```
+- Verificar compilador: `g++ --version` (deve ser 8+)
+
+#### Solução inviável
+- Ajustar parâmetros de combustível (`maxFuel`) dos robôs
+- Verificar distâncias entre nós
+- Adicionar mais robôs ou reduzir número de targets
+
+#### Performance lenta
+- Reduzir parâmetros `m` e `n` no arquivo de entrada
+- Reduzir número de targets ou robôs
+- Usar modo Release na compilação:
+  - Windows: `cmake --build . --config Release`
+  - Linux: `cmake .. -DCMAKE_BUILD_TYPE=Release`
+
+#### Variáveis de ambiente (Linux)
+
+O Gurobi no Linux requer configuração adicional de variáveis de ambiente:
+
+```bash
+# Temporário (apenas para a sessão atual)
+export GUROBI_HOME=/opt/gurobi1202/linux64
+export LD_LIBRARY_PATH=$GUROBI_HOME/lib:$LD_LIBRARY_PATH
+
+# Permanente (adicione ao ~/.bashrc)
+echo 'export GUROBI_HOME=/opt/gurobi1202/linux64' >> ~/.bashrc
+echo 'export LD_LIBRARY_PATH=$GUROBI_HOME/lib:$LD_LIBRARY_PATH' >> ~/.bashrc
+source ~/.bashrc
+```
 
 ---
 
@@ -317,4 +408,4 @@ configId:Config_Economico
 
 ---
 
-*Este documento serve como guia completo para execução e personalização do projeto matUAVs. Para detalhes técnicos de compilação, consulte [COMPILACAO.md](COMPILACAO.md).*
+*Este documento serve como guia completo para execução e personalização do projeto matUAVs em Windows e Linux. Para detalhes técnicos de compilação, consulte [COMPILACAO.md](COMPILACAO.md).*

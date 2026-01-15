@@ -2,20 +2,82 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Build with CMake",
+      "label": "CMake: Configure",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "-S",
+        ".",
+        "-B",
+        "build",
+        "-G",
+        "${input:generator}"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "CMake: Build",
       "type": "shell",
       "command": "cmake",
       "args": [
         "--build",
-        "build"
+        "build",
+        "--config",
+        "${input:buildType}"
       ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
       "group": {
         "kind": "build",
         "isDefault": true
       },
       "problemMatcher": [
-        "$msCompile"
-      ]
+        "$msCompile",
+        "$gcc"
+      ],
+      "dependsOn": []
+    },
+    {
+      "label": "CMake: Clean",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--build",
+        "build",
+        "--target",
+        "clean"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "generator",
+      "type": "pickString",
+      "description": "Select CMake generator",
+      "options": [
+        "Visual Studio 17 2022",
+        "Unix Makefiles",
+        "Ninja"
+      ],
+      "default": "Visual Studio 17 2022"
+    },
+    {
+      "id": "buildType",
+      "type": "pickString",
+      "description": "Select build configuration",
+      "options": [
+        "Release",
+        "Debug"
+      ],
+      "default": "Release"
     }
   ]
 }

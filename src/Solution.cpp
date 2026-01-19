@@ -2778,18 +2778,13 @@ void findsubset(int n,
 		// map only depots into group
 		map<int, set<int>> mapDG;
 		auto itMap = mapDG.end();
+
 		// map all nodes to solution ID
-		for (path p : s.paths)
+		for (const path& p : s.paths)
 		{
 			for (int depotID : p.depots)
 			{
-				// Verificação: ignorar IDs inválidos (por exemplo, targets ou erro de construção)
-				if (depotID < 31)
-				{
-					cerr << "Aviso: ID inválido detectado no mapa de depósitos: " << depotID
-						 << " (pID = " << p.pID << ")\n";
-					continue;
-				}
+				// insert <depot:group> into mapDG
 				itMap = mapDG.emplace_hint(itMap, depotID, set<int>());
 				itMap->second.insert(p.pID);
 			}

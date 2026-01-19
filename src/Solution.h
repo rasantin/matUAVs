@@ -23,9 +23,6 @@
 #include <queue>
 #include <utility>  // std::pair
 
-namespace std
-{
-
 	// Functor para permitir unordered_map com std::pair<int, int> como chave
 	struct pair_hash
 	{
@@ -35,7 +32,7 @@ namespace std
 		}
 	};
 
-	class Solution : Graph
+	class Solution : public Graph
 	{
 
 	private:
@@ -207,9 +204,9 @@ namespace std
 		vector<gurobi_call> vec_call;
 		alog vars;
 
-		Solution(Input &input_, int max_cvl_subset_num) : Graph(input_, max_cvl_subset_num)
+		Solution(Input &input_, int max_cvl_subset_num) : Graph(input_, max_cvl_subset_num), env()
 		{
-			GRBEnv env = GRBEnv();
+			//GRBEnv env = GRBEnv();
 			initSol(&best_sol);
 			updateSolutionWithGlobalDepots(&best_sol);
 			isAtParetoSet(best_sol);
@@ -361,8 +358,9 @@ namespace std
 
 		bool best_prediction = true;
 
+		//virtual void reset() override;
+
 	};
 
-} /* namespace std */
 
 #endif /* SRC_SOLUTION_H_ */

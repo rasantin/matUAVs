@@ -7,12 +7,39 @@
 
 #include "Graph.h"
 
-namespace std
-{
-
 	Graph::~Graph()
 	{
 		// TODO Auto-generated destructor stub
+	}
+
+	void Graph::reset()
+	{
+		// limpar todas as estruturas de dados
+		graph.clear();
+		nodeIdToIndex.clear();
+		indexToNodeId.clear();
+		graphDepotsIndexes.clear();
+		graphTargetsIndexes.clear();
+		mapNodesTypes.clear();
+		mapRobotGroup.clear();
+		mapRobotGroup_Bckup.clear();
+		mapGroupRobot.clear();
+		mapGroupRobot_Bckup.clear();
+		map_cvset_id_to_node_id.clear();
+		min_fuel.clear();
+		nGraphs.clear();
+		coverageSets.clear();
+		coverage_set.first.clear();
+		coverage_set.second = graphInfo();
+		cLines = 0;
+		nRobots = 0;
+		nLines = 0.0;
+		nodesX.clear();
+		cvl_subset_num = 5;
+		nodesSets.clear();
+		nodesSets_Bckup.clear();
+		link_nid_to_ninfo.clear();
+		map_nodes_on_cl.clear();
 	}
 
 	// build initial complete graph
@@ -2075,5 +2102,3 @@ void Graph::setMapGroupOfRobot()
 		}
 	}
 }
-
-} /* namespace std */

@@ -8,6 +8,8 @@
 #include "Solution.h"
 #include <chrono>
 #include <iomanip>
+#include <cassert>
+
 
 void findsubset(int n, vector<vector<double>> &sol, vector<vector<int>> *subsets);
 void DFS(const vector<vector<double>> &g, int v, int n, bool *seen, vector<int> *subset, bool *inserted);
@@ -15,19 +17,24 @@ void DFS(const vector<vector<double>> &g, int v, int n, bool *seen, vector<int> 
 class subtourelim : public GRBCallback
 {
 public:
-	GRBVar **vars;
-	GRBVar *vars_d;
-
+	//GRBVar **vars;
+	//GRBVar *vars_d;
+	const std::vector<std::vector<GRBVar>>& vars_x;
+    const std::vector<GRBVar>& vars_d;
 	int n;
 	int nd;
 	int wm;
-	subtourelim(GRBVar **xvars, int xn, GRBVar *yvars, int yn)
-	{
-		vars = xvars;
-		n = xn;
-		vars_d = yvars;
-		nd = yn;
-	}
+	//subtourelim(GRBVar **xvars, int xn, GRBVar *yvars, int yn)
+    
+	subtourelim(
+        const std::vector<std::vector<GRBVar>>& xvars,
+        const std::vector<GRBVar>& yvars
+    )
+        : vars_x(xvars),
+          vars_d(yvars),
+          n(static_cast<int>(xvars.size())),
+          nd(static_cast<int>(yvars.size()))
+    {}
 
 protected:
 	void callback()
@@ -44,20 +51,24 @@ protected:
 
 				// Found an integer feasible solution - does it visit every node?
 				vector<vector<double>> x(n, vector<double>(n, 0.0));
-				for (int i = 0; i < n; i++)
-				{
-					double *sol = getSolution(vars[i], n);
-					copy(sol, sol + n, x[i].begin());
-					delete[] sol;
+
+				for (int i = 0; i < n; i++){
+    				for (int j = 0; j < n; j++){
+        				x[i][j] = getSolution(vars_x[i][j]);
+   					 }
 				}
-				int i, j;
 
 				vector<double> y(nd, 0.0);
-				double *sol_y = getSolution(vars_d, nd);
-				copy(sol_y, sol_y + nd, y.begin());
 
+				for (int i = 0; i < nd; i++){
+					y[i] = getSolution(vars_d[i]);
+				}
+				
 				vector<vector<int>> subsets;
 				findsubset(n, x, &subsets);
+
+				if(subsets.size() <= 1)
+					return;
 
 				vector<int> depots_on_subset;
 
@@ -94,9 +105,9 @@ protected:
 					}
 					ordered_subsets.insert(ordered_subsets.begin(), subsets_S.begin(), subsets_S.end());
 
-					// for(auto it_subset_a = subsets_S.begin(); it_subset_a !=subsets_S.end();it_subset_a++){
-
 					ordered_subsets.push_back(not_S);
+
+					int i = 0, j = 0;
 
 					// obter as arestas entre os subconjuntos S e o não S.
 					for (auto it_subset_a = ordered_subsets.begin(); it_subset_a != ordered_subsets.end(); it_subset_a++)
@@ -126,18 +137,17 @@ protected:
 								for (auto it_id_j = it_subset_b->begin(); it_id_j != it_subset_b->end(); it_id_j++)
 								{
 									j = *it_id_j;
-									expr += vars[i][j];
+									expr += vars_x[i][j];
 								}
 							}
 						}
 						// adicinar as restrições para cada depot em S
-						// for (int d : depots_on_subset)
-						// addLazy(expr >= y[d]);
 						const double DEPOT_ACTIVE_THRESHOLD = 0.5;
 						double max_y = 0;
 						for (int d : depots_on_subset)
-							if (y[d] > max_y)
+							if (y[d] > max_y){
 								max_y = y[d];
+							}
 
 						if (max_y > DEPOT_ACTIVE_THRESHOLD) // depósito ativo
 							addLazy(expr >= 1);				// exige ligação fora do subconjunto
@@ -225,8 +235,6 @@ void findsubset(int n,
  * @note O vetor de depots não inclui a base, pois esta não sofrerá modificações.
  */
 
-namespace std
-{
 	void Solution::initSol(solution *s)
 	{
 		// 1. Inicializa variáveis para rastrear:
@@ -571,18 +579,20 @@ namespace std
 		// Begin model construction
 		try
 		{
-			GRBModel model = GRBModel(env);
+			GRBModel model (env);
 
 			// Gurobi performance parameters
 			model.set(GRB_IntParam_OutputFlag, 0);		// suppress solver output
 			model.set(GRB_IntParam_LazyConstraints, 1); // enable lazy constraints
-			model.set(GRB_IntParam_Threads, 0);			// use all available CPU cores
+			model.set(GRB_IntParam_Threads, 1);			// use all available CPU cores
 
 			// Multi-objective optimization setup
 			GRBVar var_Pmax = model.addVar(0.0, GRB_INFINITY, 0.0, GRB_CONTINUOUS, "vars_Pmax");
 			GRBVar var_Dmin = model.addVar(0.0, D - 1, 0.0, GRB_INTEGER, "vars_Dmin");
 
-			GRBVar *Elem = new GRBVar[2];
+			//GRBVar *Elem = new GRBVar[2];
+			GRBVar Elem[2];
+
 			Elem[0] = var_Pmax; // Elem[0] = objective variable Pmax
 			Elem[1] = var_Dmin; // Elem[1] = objective variable Dmin
 
@@ -595,14 +605,17 @@ namespace std
 			model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
 			model.update();
 
-			GRBVar **vars_x = NULL;
-			vars_x = new GRBVar *[N];
-			for (i = 0; i < N; i++)
-				vars_x[i] = new GRBVar[N];
+			//GRBVar **vars_x = NULL;
+			//vars_x = new GRBVar *[N];
+			vector<vector<GRBVar>> vars_x(N, vector<GRBVar>(N));
+			//for (i = 0; i < N; i++)
+				//vars_x[i] = new GRBVar[N];
 
-			GRBVar *vars_d = nullptr;
+			//GRBVar *vars_d = nullptr;
+			vector<GRBVar> vars_d(D - 1);
 			if (D > 1)
-				vars_d = new GRBVar[D - 1];
+				vars_d.resize(D - 1);
+				//vars_d = new GRBVar[D - 1];
 
 			// Create decision variables x_ijk for all edges except self-loops (i != j)
 			for (i = 0; i < N; i++)
@@ -613,9 +626,10 @@ namespace std
 				}
 			}
 			// Create decision variables z_ij for all edges (including self-loops)
-			GRBVar **vars_z = new GRBVar *[N];
-			for (i = 0; i < N; i++)
-				vars_z[i] = new GRBVar[N];
+			//GRBVar **vars_z = new GRBVar *[N];
+			vector<vector<GRBVar>> vars_z(N, vector<GRBVar>(N));
+			//for (i = 0; i < N; i++)
+				//vars_z[i] = new GRBVar[N];
 			for (i = 0; i < N; i++)
 			{
 				for (j = 0; j < N; j++)
@@ -930,7 +944,7 @@ namespace std
 
 			// Determines whether a warm start can be applied by checking if the initial solution contains any edges.
 			bool hasWarmStart = !initial_sol.edges.empty();
-
+			
 			if (hasWarmStart)
 			{
 				/******************************************************************************************/
@@ -1008,13 +1022,27 @@ namespace std
 			model.set(GRB_DoubleParam_MIPGap, 0.01);
 
 			// Create callback object for subtour elimination with warm start flag = 1
-			subtourelim cb = subtourelim(vars_x, N, vars_d, D - 1);
+			//subtourelim cb = subtourelim(vars_x, N, vars_d, D - 1);
+			//model.setCallback(&cb);
+			//subtourelim cb(vars_x, N, vars_d, D - 1);
+			subtourelim cb(vars_x, vars_d);
+
 			model.setCallback(&cb);
 
 			// Start measuring optimization time
 			start = std::chrono::system_clock::now();
 			// Run the optimization
-			model.optimize();
+			//model.optimize();
+
+			try {
+    			model.optimize();
+				} catch (GRBException& e) {
+    			std::cerr << "Gurobi Exception: " << e.getMessage() << std::endl;
+				} catch (std::exception& e) {
+    			std::cerr << "STD Exception: " << e.what() << std::endl;
+			}
+
+
 			// End time measurement
 			end = std::chrono::system_clock::now();
 
@@ -1150,15 +1178,16 @@ namespace std
 				sol.pID = -1;
 			}
 
+			model.setCallback(nullptr);
 			// Manual memory deallocation for dynamically allocated GRBVar arrays
 			// vars_x, vars_d, vars_z are 2D/1D arrays of GRBVar used in the model
-			for (int i = 0; i < N; i++)
-				delete[] vars_x[i];
-			delete[] vars_x;
-			delete[] vars_d;
-			for (int i = 0; i < N; i++)
-				delete[] vars_z[i];
-			delete[] vars_z;
+			//for (int i = 0; i < N; i++)
+			//	delete[] vars_x[i];
+			//delete[] vars_x;
+		//	delete[] vars_d;
+			//for (int i = 0; i < N; i++)
+			//	delete[] vars_z[i];
+			//delete[] vars_z;
 		}
 		catch (GRBException &e)
 		{
@@ -8528,4 +8557,5 @@ namespace std
 		return odd_indexes;
 	}
 
-} /* namespace std */
+
+

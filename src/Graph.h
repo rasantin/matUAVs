@@ -201,6 +201,7 @@ public:
 	//Graph(): input(*new Input){ };
 	Graph(Input &input_, int nsubset):input(input_){
 		cvl_subset_num = nsubset;
+		reset();
 		buildGraph();
 		splitHGraph();
 		mapRobotTypeGroups();
@@ -300,6 +301,8 @@ public:
 
 
 	virtual ~Graph();
+	virtual void reset();
+
 };
 
 

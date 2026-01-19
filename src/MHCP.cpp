@@ -72,8 +72,9 @@ int main(int argc, char **argv) {
 	int cvl_subset_num = input.getMaxCVLSubSet();
 
 	while(exec <= input.getNExec()){
-	//while(exec <= 1){
-
+		std::cout << "\n[EXEC] Start exec " << exec << "/" << input.getNExec() << std::endl;
+		n=1;
+		m=1;
 		output.createOutput(datetime());
 
 		Solution s(input,cvl_subset_num);
@@ -83,6 +84,10 @@ int main(int argc, char **argv) {
 		int targetsNum = s.getTargetsNum();
 
 		start = std::chrono::system_clock::now();
+
+		std::cout << "[EXEC " << exec << "] HasSolutionNotVisited = "
+          << s.HasSolutionNotVisited()
+          << ", targetsNum = " << targetsNum << std::endl;
 		while(s.HasSolutionNotVisited() && m <= targetsNum){
 
 			s.currentSol = s.best_sol;
@@ -206,9 +211,12 @@ int main(int argc, char **argv) {
 		output.writeParetoSet(s,program_name, fileName, datetime(),duration_time.count(),targetsNum, s.paretoSetValidation(),
 				exec, input.getNExec(), input.getM(),input.getN(),cvl_subset_num);
 		m=1;
+			std::cout << "[EXEC " << exec << "] Finished. m=" << m << " n=" << n << std::endl;
+
 		exec++;
 
 	}
+
 	return 0;
 }
 

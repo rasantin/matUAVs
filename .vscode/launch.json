@@ -6,7 +6,7 @@
       "type": "cppvsdbg",
       "request": "launch",
       "program": "${workspaceFolder}/build/bin/Debug/matUAVs.exe",
-      "args": ["C_T20_R6.txt"],
+      "args": ["D_T30_R6.txt"],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}",
       "environment": [],

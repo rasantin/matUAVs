@@ -22,7 +22,7 @@
 #include <list>
 #include <tuple>
 #include <queue>
-#include <unordered_map>  // Added
+#include <unordered_map>
 #include <utility>  // std::pair
 
 	// Functor para permitir unordered_map com std::pair<int, int> como chave

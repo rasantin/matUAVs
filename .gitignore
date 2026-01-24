@@ -1,6 +1,9 @@
 # Ignorar arquivos de depuração
 *.pdb
 
+# Ignorar arquivos temporários
+nul
+
 # Ignorar pastas geradas automaticamente
 /bin/
 /output/

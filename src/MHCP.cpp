@@ -21,6 +21,7 @@
 #include "Input.h"
 #include "Solution.h"
 #include "Output.h"
+#include "SolverContext.h"
 
 //#include <unistd.h>
 using namespace std;
@@ -43,8 +44,8 @@ int main(int argc, char **argv) {
 	int exec = 1;
 	int m = 1;
 	int n=1;
-	//mÃĄximo de quantidade de linhas de cobertura por subset
 
+	SolverContext solverCtx; // inicializa contexto do solver Gurobi
 	//bool best_prediction = false;
 	bool best_prediction = true;
 
@@ -53,8 +54,6 @@ int main(int argc, char **argv) {
 	chrono::duration <std::chrono::system_clock> el_s;
 
 	double elapsed_seconds;
-
-
 	string program_name = argv[0];
 	string fileName = argv[1];
 
@@ -77,7 +76,10 @@ int main(int argc, char **argv) {
 		m=1;
 		output.createOutput(datetime());
 
-		Solution s(input,cvl_subset_num);
+		// Construtor de Solution: inicializa best_sol, atualiza depósitos globais,
+		// verifica Pareto e prepara o objeto para o VNS, passando SolverContext para solver Gurobi
+		Solution s(solverCtx,input,cvl_subset_num);
+		
 		s.best_prediction = best_prediction;
 
 		int maxDepots = s.getDepotsNumInit();
@@ -106,7 +108,7 @@ int main(int argc, char **argv) {
 				//s.printSol(s.currentSol);
 				//cout << "Vector of Solutions:" << s.vecSol.size() <<endl;
 				//start_op = std::chrono::system_clock::now();
-				if(s.shift(&s.currentSol)){
+				if(s.shift()){
 					//end_op= std::chrono::system_clock::now();
 					//elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds> (end_op-start_op).count();
 					//cout << " time:" <<elapsed_seconds <<"segundos" <<endl;
@@ -132,7 +134,7 @@ int main(int argc, char **argv) {
 				//s.printSol(s.currentSol);
 				//cout << "Vector of Solutions:" << s.vecSol.size() <<endl;
 				//start_op = std::chrono::system_clock::now();
-				if(s.improveSol(&s.currentSol)){
+				if(s.improveSol(solverCtx, &s.currentSol)){
 					//end_op= std::chrono::system_clock::now();
 					//elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds> (end_op-start_op).count();
 					//cout << " time:" <<elapsed_seconds <<"segundos" <<endl;

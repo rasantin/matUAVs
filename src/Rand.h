@@ -13,22 +13,19 @@
 #include <algorithm>
 #include <numeric>
 
-namespace std {
-
 class Rand {
 public:
 	Rand();
 	virtual ~Rand();
 
 	// Create random engine generator
-	mt19937 eng{ std::random_device{}() };
+	std::mt19937 eng{ std::random_device{}() };
 
-	vector<int> randVector(int i);
-	void sufferVector(vector<int>* v);
+	std::vector<int> randVector(int i);
+	void sufferVector(std::vector<int>* v);
 	int randNum(int i);
 	int randNum(int a, int b);
 };
 
-} /* namespace std */
 
 #endif /* SRC_RAND_H_ */

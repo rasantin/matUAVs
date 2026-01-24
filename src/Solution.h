@@ -13,6 +13,7 @@
 #include "Graph.h"
 #include "Rand.h"
 #include "Utils.h"
+#include "SolverContext.h"
 
 #include <stack>
 #include <limits>
@@ -47,14 +48,14 @@
 		struct path
 		{
 			// pair<int,int> id nodes A->B, pair<double, double> (fcost, time)
-			vector<pair<pair<int, int>, pair<double, double>>> nodes;
-			vector<edge> edges;
-			map<int, double> fuelOnTarget;
+			std::vector<std::pair<std::pair<int, int>, std::pair<double, double>>> nodes;
+			std::vector<edge> edges;
+			std::map<int, double> fuelOnTarget;
 			int robotID ;
 			int pID ;
 			// sum of fcosts
 			double pCost;
-			set<int> depots;
+			std::set<int> depots;
 			int depotsNum;
 			int targetsNum;
 
@@ -63,41 +64,39 @@
 
 		struct solution
 		{
-			vector<path> paths;
+			std::vector<path> paths;
 			double sCost;
 			double maxCost;
 			int depotsNum;
 			int targetsNum;
 			int maxCostPathID;
-			set<int> depots;
+			std::set<int> depots;
 		};
 
-		string itos(int i)
+		std::string itos(int i)
 		{
-			stringstream s;
+			std::stringstream s;
 			s << i;
 			return s.str();
 		}
 		Rand rand;
-		path bestPath(int gID);
-		path MILP(Set coverage_set);
-		path MILP_Warm_Start(Set coverage_set, path initial_sol);
-		path milpSolver(Set coverage_set, path initial_sol = path());
-		path improvePath(path p);
+		path bestPath(SolverContext& ctx,int gID);
+		path milpSolver(SolverContext& ctx, const Set& coverage_set, const path& initial_sol = path());
+		path improvePath(SolverContext& ctx, path p);
 
 		path removeCL(path p, int cl);
 		path remove_cl_new(path p, int cl);
 		path insertCL(path p, int from, int to);
 		// path bestInsertionCL(path p, int cl);
 
-		pair<path, string> bestInsertionCL(path p, int cl);
+		std::pair<path, std::string> bestInsertionCL(path p, int cl);
 
-		pair<int, int> getCLDirection(path p, int cl);
+		std::pair<int, int> getCLDirection(path p, int cl);
 
-		vector<edge> GetEdgesCosts(vector<pair<int, int>> path, int RobotID);
+		std::vector<edge> GetEdgesCosts(std::vector<std::pair<int, int>> path, int RobotID);
 
-		path AdjustRefuelingFromNode(vector<edge> path_cost, path p, int node);
-		path AdjustPathRefueling(vector<edge> path_costs, path p);
+		path AdjustRefuelingFromNode(std::vector<edge> path_cost, path p, int node);
+		path AdjustPathRefueling(std::vector<edge> path_costs, path p);
 
 		path GetPathFromBaseToNewCL(path p, int pos);
 		path GetPathFromNodeAToNodeB(path p, int node_a, int node_b);
@@ -106,20 +105,20 @@
 		path GetInvPathFromNewCLToBase(path p, int pos);
 		path GetInvPath(path p);
 
-		vector<pair<int, int>> GetInvCLs(vector<pair<int, int>> cls_vec);
-		vector<pair<int, int>> GetALLCLsFromBaseToNewCL(path p, int cl);
-		vector<pair<int, int>> GetALLCLsFromBase(path p);
-		vector<pair<int, int>> GetALLCLsFromNewCLToBase(path p, int node);
+		std::vector<std::pair<int, int>> GetInvCLs(std::vector<std::pair<int, int>> cls_vec);
+		std::vector<std::pair<int, int>> GetALLCLsFromBaseToNewCL(path p, int cl);
+		std::vector<std::pair<int, int>> GetALLCLsFromBase(path p);
+		std::vector<std::pair<int, int>> GetALLCLsFromNewCLToBase(path p, int node);
 
 		path PathUnion(path path_a, path path_b);
 
 		void Iteractive_DFS(path p);
 		void SortMultiplesAdjacentOnDepots(path *p);
 
-		pair<path, string> GetLeastCostPath(path p1, path p2, path p3, path p4);
+		std::pair<path, std::string> GetLeastCostPath(path p1, path p2, path p3, path p4);
 
-		vector<pair<int, int>> GetEdgesFromPreviousCLToCL(path p, int cl);
-		vector<pair<int, int>> GetEdgesFromCLToPosteriorCL(path p, int cl);
+		std::vector<std::pair<int, int>> GetEdgesFromPreviousCLToCL(path p, int cl);
+		std::vector<std::pair<int, int>> GetEdgesFromCLToPosteriorCL(path p, int cl);
 
 		path new_insert(path p, int out, int new_cl);
 
@@ -134,36 +133,35 @@
 
 		void testeInvWalk(path p);
 		path insertCLTest(path p, int from, int to);
-		pair<path, string> EvalOthersOrientationsOnPath(path p, int cl);
+		std::pair<path, std::string> EvalOthersOrientationsOnPath(path p, int cl);
 		path Union_Solutions(solution sol_vec);
 
-		list<pair<pair<pair<int, int>, double>, vector<int>>> GetTargetsLinkingCLs(path p);
+		std::list<std::pair<std::pair<std::pair<int, int>, double>, std::vector<int>>> GetTargetsLinkingCLs(path p);
 
 		// obter o grafo dos depots que estão ente os targets a e b
-		map<int, vector<pair<int, double>>> GetGraphOfDepotsBetween_T2T(int a, int b, int robot_id);
-		map<int, vector<pair<int, double>>> GetOpenDepotGraphFromPath(path p);
+		std::map<int, std::vector<std::pair<int, double>>> GetGraphOfDepotsBetween_T2T(int a, int b, int robot_id);
+		std::map<int, std::vector<std::pair<int, double>>> GetOpenDepotGraphFromPath(path p);
 
-		map<int, vector<pair<int, double>>> AddTargetOnGraph(map<int, vector<pair<int, double>>> list_adj,
+		std::map<int, std::vector<std::pair<int, double>>> AddTargetOnGraph(std::map<int, std::vector<std::pair<int, double>>> list_adj,
 															 int node_a, int node_b, int robot_id);
-		map<int, vector<pair<int, double>>> AddNodesOnGraph(map<int, vector<pair<int, double>>> list_adj, path p,
+		std::map<int, std::vector<std::pair<int, double>>> AddNodesOnGraph(std::map<int, std::vector<std::pair<int, double>>> list_adj, path p,
 															int node_a, int node_b);
 
-		vector<int> SPT_A_Star(map<int, vector<pair<int, double>>> list_adj, int start, int goal, int robot_id);
+		std::vector<int> SPT_A_Star(std::map<int, std::vector<std::pair<int, double>>> list_adj, int start, int goal, int robot_id);
 
 		bool HasRepeatedCLines(path p);
 
-		vector<pair<int, int>> GetPrevNextNodes(path p, int node_id);
-		path LinkPairsOnPath(path p, vector<pair<int, int>> p_nodes);
+		std::vector<std::pair<int, int>> GetPrevNextNodes(path p, int node_id);
+		path LinkPairsOnPath(path p, std::vector<std::pair<int, int>> p_nodes);
 
 		path RemoveDepotFromPath(path p, int node_id);
 
 		void OpenRandomDepotsOnTargetsPath(path *p);
 
 		double maxSolCost;
-		void initSol(solution *s);
+		void initSol(SolverContext& ctx, solution *s);
 		int depotsNumInit = 0;
 
-		GRBEnv env;
 		double gurobi_time_limit = 0;
 		double gurobi_optimize_time;
 		bool initialSolution = true;
@@ -182,14 +180,14 @@
 			int pred_num;
 			int pred_improv_sol;
 			bool best_pred;
-			string operation;
-			string path_op_g1;
-			string path_op_g2;
+			std::string operation;
+			std::string path_op_g1;
+			std::string path_op_g2;
 			double pred_time_g1;
 			double pred_time_g2;
 		};
 
-		vector<pred> vec_predictions;
+		std::vector<pred> vec_predictions;
 
 		struct gurobi_call
 		{
@@ -198,50 +196,36 @@
 			int D;
 			double optimize_time;
 			bool feasible;
-			string type;
+			std::string type;
 		};
 
-		vector<gurobi_call> vec_call;
+		std::vector<gurobi_call> vec_call;
 		alog vars;
 
-		Solution(Input &input_, int max_cvl_subset_num) : Graph(input_, max_cvl_subset_num), env()
-		{
-			//GRBEnv env = GRBEnv();
-			initSol(&best_sol);
-			updateSolutionWithGlobalDepots(&best_sol);
-			isAtParetoSet(best_sol);
-			print_paretoSet();
-			initialSolution = false;
-		};
+		Solution(SolverContext& ctx, Input& input_, int max_cvl_subset_num);
+    	
+		// defensivo: Solution não pode ser copiada
+    	Solution(const Solution&) = delete;
+    	Solution& operator=(const Solution&) = delete;
 
-		Solution &operator=(Solution s)
-		{
-			currentSol = s.currentSol;
-			best_sol = s.best_sol;
-			maxSolCost = s.maxSolCost;
-			changeLog = s.changeLog;
-			vars = s.vars;
-			return *this;
-		}
-
-		Solution();
 		virtual ~Solution();
 
 		solution currentSol;
 		solution best_sol;
 
-		vector<solution> vecSol;
-		vector<pair<bool, solution>> paretoSet;
-		pair<pair<int, int>, pair<int, int>> changeLog;
-		map<int, set<int>> mapDG;
+		std::vector<solution> vecSol;
+		std::vector<std::pair<bool, solution>> paretoSet;
+		std::pair<std::pair<int, int>, std::pair<int, int>> changeLog;
+		std::map<int, std::set<int>> mapDG;
 
 		// defining neighborhood functions
 		bool swap(solution *s);
-		bool shift(solution *s);
-		void pshift(solution *s);
+		//bool shift(solution *s);
+		bool shift();
+		void pshift(solution*s);
 		bool swapRobots(solution *s);
 		void openRandomDepot(solution *s);
-		bool improveSol(solution *s);
+		bool improveSol(SolverContext& ctx,solution *s);
 
 		// junction of pertubation methods
 		void perturbation(solution *s, int maxDepots);
@@ -252,15 +236,15 @@
 		double getMaxSolCost();
 
 		// return all depots open depots
-		vector<int> getOpenDepots();
+		std::vector<int> getOpenDepots();
 
 		void mapOpenDepotsToGroup();
 
 		// return the odd indexes of coverage lines in path p
-		vector<int> getOddCVLIndexes(const path& p);
+		std::vector<int> getOddCVLIndexes(const path& p);
 
 		// return the map from depots and theirs groups
-		map<int, set<int>> getMapDG(solution s);
+		std::map<int, std::set<int>> getMapDG(solution s);
 
 		void updatePathCurrenteSol(int gID, path p);
 
@@ -277,10 +261,10 @@
 
 		path CloseDepotLinkToNext(path p, int depot_to_close, int next_depot);
 
-		vector<int> getClosedDepots(solution s);
+		std::vector<int> getClosedDepots(solution s);
 
 		void depotsOperation();
-		void updateSolutionWithGlobalDepots(solution *s);
+		void updateSolutionWithGlobalDepots(SolverContext& ctx,solution *s);
 
 		// insert solution on paretoSet.
 		void insert_solution(solution s);
@@ -291,7 +275,7 @@
 		void clear_vecSol();
 
 		// remove solution pointed with iterator from paretoSet.
-		void erase_solution(vector<pair<bool, solution>>::iterator solIt);
+		void erase_solution(std::vector<std::pair<bool, solution>>::iterator solIt);
 
 		// return a solution from solID position from paretoSet
 		solution get_solution(int solID);
@@ -303,16 +287,16 @@
 		solution get_random_solution();
 
 		// Insert sol at paretoSet if solution is non-dominated and remove all solutions dominated
-		void update_paretoSet(map<int, vector<int>> mapEval, solution s);
+		void update_paretoSet(std::map<int, std::vector<int>> mapEval, solution s);
 
 		// return a map from  dominance evaluation of s with all other solution on paretoSet
-		map<int, vector<int>> eval_solution(solution s);
+		std::map<int, std::vector<int>> eval_solution(solution s);
 
 		// Perform evaluation of solution and update paretoSet and return true if the solution is at paretoSet
 		bool isAtParetoSet(solution s);
 
 		// return iterator of  paretSet solution at solID position;
-		vector<pair<bool, solution>>::iterator getSolIterator(int solID);
+		std::vector<std::pair<bool, solution>>::iterator getSolIterator(int solID);
 		// print all solution at paretoSet
 		void print_paretoSet();
 
@@ -332,7 +316,7 @@
 
 		int getTargetsNum();
 		bool validation(solution s);
-		vector<bool> paretoSetValidation();
+		std::vector<bool> paretoSetValidation();
 		bool robotCapacity_val(path p);
 		path RobotCostInPath(path p);
 
@@ -357,8 +341,6 @@
 		}
 
 		bool best_prediction = true;
-
-		//virtual void reset() override;
 
 	};
 

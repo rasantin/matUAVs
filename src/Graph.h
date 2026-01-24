@@ -23,8 +23,6 @@
 #include "Utils.h"
 
 
-namespace std {
-
 class Graph {
 protected:
 	struct graphInfo{
@@ -37,66 +35,67 @@ protected:
 	//Alias 'uint' for  'unsigned int'
 	using uint = unsigned int;  
 
-
 	//initial complete graph ;
-	vector < vector<double>> graph;
+	std::vector < std::vector<double>> graph;
 
-	map<int, int> nodeIdToIndex;   // nodeId -> índice da matriz
-	map<int, int> indexToNodeId;   // índice da matriz -> nodeId
+	std::map<int, int> nodeIdToIndex;   // nodeId -> índice da matriz
+	std::map<int, int> indexToNodeId;   // índice da matriz -> nodeId
 
 	//vector of depots indexes
-	vector<int> graphDepotsIndexes;
+	std::vector<int> graphDepotsIndexes;
 
 	//vector of targets indexes
-    vector<int> graphTargetsIndexes;
+    std::vector<int> graphTargetsIndexes;
 
-    map<int,int> mapNodesTypes;
+    std::map<int,int> mapNodesTypes;
 
-    map<int,set<int>> mapRobotGroup;
-    map<int,set<int>> mapRobotGroup_Bckup;
+    std::map<int,std::set<int>> mapRobotGroup;
+    std::map<int,std::set<int>> mapRobotGroup_Bckup;
 
     //mapear cada robô ao seu grupo
-    map<int,int> mapGroupRobot;
-    map<int,int> mapGroupRobot_Bckup;
+    std::map<int,int> mapGroupRobot;
+    std::map<int,int> mapGroupRobot_Bckup;
 
     //map coverage_set_id to node id on graph;
-    map<int,int> map_cvset_id_to_node_id;
+    std::map<int,int> map_cvset_id_to_node_id;
 
     //fuel to closest depot
-    map<int,double> min_fuel;
+    std::map<int,double> min_fuel;
+
+	// NOTE: Estrutura complexa (pair<vector<pair<vector<double>,int>>, graphInfo>)
+	// Representa um subgrafo com:
+	//  - first  -> lista de arestas (custos + nó)
+	//  - second -> informações do grafo (robot, base, T, D)
+	// TODO(refactor): substituir por struct GraphBlock quando o VNS estiver estável
 
 	//matriz com os ngrafos
-	vector<pair<vector<pair<vector<double>,int>>,graphInfo>> nGraphs;
+	std::vector<std::pair<std::vector<std::pair<std::vector<double>,int>>,graphInfo>> nGraphs;
 
 	//matriz com os nConjuntos de cobertura
-	vector<pair<vector<pair<vector<double>,int>>,graphInfo>> coverageSets;
+	std::vector<std::pair<std::vector<std::pair<std::vector<double>,int>>,graphInfo>> coverageSets;
 
-	pair<vector<pair<vector<double>,int>>,graphInfo> coverage_set;
-
+	std::pair<std::vector<std::pair<std::vector<double>,int>>,graphInfo> coverage_set;
 
 	//matriz de backup dos ngraphs.
-	//vector<pair<vector<pair<vector<double>,int>>,graphInfo>> nGraphsBckup;
-
-	//vector<pair<vector<pair<vector<double>,int>>,graphInfo>> nSetsBckup;
-	vector<pair<vector<pair<vector<double>,int>>,graphInfo>> coverageSets_Bckup;
+	std::vector<std::pair<std::vector<std::pair<std::vector<double>,int>>,graphInfo>> coverageSets_Bckup;
 
 	float cLines = 0;
 	float nRobots = 0;
 	float nLines = 0.0;
 
 	// Declaring the type of Predicate that accepts 2 pairs and return a bool
-	typedef function<bool(pair<int, double>, pair<int, double>)> Comparator;
+	typedef std::function<bool(std::pair<int, double>, std::pair<int, double>)> Comparator;
 
 	// Defining a lambda function to compare two pairs. It will compare two pairs using second field
 	Comparator compFunctor =
-			[](pair<int, double> elem1 ,pair<int, double> elem2)
+			[](std::pair<int, double> elem1 ,std::pair<int, double> elem2)
 			{
 				return elem1.second < elem2.second;
 			};
 
 	// Defining a lambda function to compare two nodes. It will compare two nodes using node's position (X position).
 	Comparator compFunctor2 =
-			[](pair<int,double> p1, pair<int,double> p2)
+			[](std::pair<int,double> p1, std::pair<int,double> p2)
 			{
 		return p1.second > p2.second;
 			};
@@ -119,9 +118,6 @@ protected:
 	// atribui  para nGraph o tempo de voo de cada aresta para cada um dos n grafos, obtidos da função splitGraph.
 	void setAllNodesCosts();
 
-	//void updateCosts(int k);
-	//void updateSetNodesCosts(int k);
-
 	//calcular o tempo de voo
 	double getFlightTime(double distance, double vel);
 
@@ -137,7 +133,7 @@ protected:
 	void sortNodesX();
 
 	//vetor ordenado de nós em relação ao eixo X
-	vector<Node> nodesX;
+	std::vector<Node> nodesX;
 
 	void insertDepotsOnNodesSets();
 	void mapRobotTypeGroups();
@@ -153,16 +149,16 @@ protected:
 public:
 	Input &input;
 
-	map<int,int >map_nodes_on_cl;
+	std::map<int,int >map_nodes_on_cl;
 
 
 	//data set
 	struct sub_set_data {
 		//vector of coverage line, only first node id.
-		vector<int> cvLines;
+		std::vector<int> cvLines;
 
 		//set of depots including robot base
-		vector<int> depots;
+		std::vector<int> depots;
 
 		//sum of all coverage line;
 		double length;
@@ -171,10 +167,10 @@ public:
 	//data set
 	struct Set {
 		//vector of coverage line, only first node id.
-		vector<int> cvLines;
+		std::vector<int> cvLines;
 
 		//set of depots including robot base
-		vector<int> depots;
+		std::vector<int> depots;
 
 		//sum of all coverage line;
 		double length;
@@ -184,15 +180,15 @@ public:
 
 		int set_id;
 
-		vector<sub_set_data> sub_set;
+		std::vector<sub_set_data> sub_set;
 	};
 
 
 	//nodesSets conjunto com um nós representande da linha de cobertura e as informações dos depósitos, tamanho e robô
-	vector<Set> nodesSets;
-	vector<Set> nodesSets_Bckup;
+	std::vector<Set> nodesSets;
+	std::vector<Set> nodesSets_Bckup;
 
-	map<int,Node> link_nid_to_ninfo;
+	std::map<int,Node> link_nid_to_ninfo;
 	Graph(const Graph &g):input(g.input){}
 
 
@@ -222,7 +218,6 @@ public:
 	double getCost(unsigned int i, unsigned int j);
 
 	double getCostOnGraph(unsigned int robotID, unsigned int i, unsigned int j);
-
 
 	//get graphs number
 	int getNOfGraphs();
@@ -258,37 +253,36 @@ public:
 
 	void restoreNGraphs();
 	void restoreNSets();
-	vector<pair<int,double>> getSetsArea();
+	std::vector<std::pair<int,double>> getSetsArea();
 
-	vector<int> getDepotsBetweenNodes(int n1, int n2);
+	std::vector<int> getDepotsBetweenNodes(int n1, int n2);
 
 	int getBaseID(int k);
 	int getBaseID();
-	void removeDepots(int n1, vector<int>& depots);
+	void removeDepots(int n1, std::vector<int>& depots);
 	void getDistanceBetweenCVLines(int cvLine1,int cvLine2);
-	bool insertNewCVLine(int k1,int k2, int targetID, vector<int>&depotsK1, vector<int>&depotsK2);
+	bool insertNewCVLine(int k1,int k2, int targetID, std::vector<int>&depotsK1, std::vector<int>&depotsK2);
 
-	void updateNodesSets(vector<Set> ns);
-	void updateCoverageSets(vector<Set> ns);
+	void updateNodesSets(std::vector<Set> ns);
+	void updateCoverageSets(std::vector<Set> ns);
 	void Convert_NS_to_CS(Set ns);
 
-	void updateAllSets(vector<Set> ns);
+	void updateAllSets(std::vector<Set> ns);
 	void updateCoverageSet(int k);
-	void insertNSDepots(int id, vector<int> depots);
+	void insertNSDepots(int id, std::vector<int> depots);
 
 	void swapRobotsNodesSets(int g1,int g2 );
-	void UpdateDepotsOnSubSet(int nodeset_id , int subset_id,vector<int> depot);
-	void UpdateDepots(int id, vector<int> depots);
-
+	void UpdateDepotsOnSubSet(int nodeset_id , int subset_id,std::vector<int> depot);
+	void UpdateDepots(int id, std::vector<int> depots);
 
 	int getMapRobotGroupSize();
-	set<int> getRobotGroups(int k);
+	std::set<int> getRobotGroups(int k);
 
 	void swapRobotsGroups(int k1, int g1, int k2, int g2);
 
 	int getTargetsGraphIndexNum();
 
-	map<int,int> GetALLCLines();
+	std::map<int,int> GetALLCLines();
 
 	bool IsCLine(int node1, int node2);
 
@@ -305,8 +299,5 @@ public:
 
 };
 
-
-
-} /* namespace std */
 
 #endif /* SRC_GRAPH_H_ */

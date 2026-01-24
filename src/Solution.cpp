@@ -10,8 +10,8 @@
 #include <iomanip>
 #include <cassert>
 
-void findsubset(int n, vector<vector<double>> &sol, vector<vector<int>> *subsets);
-void DFS(const vector<vector<double>> &g, int v, int n, bool *seen, vector<int> *subset, bool *inserted);
+void findsubset(int n, std::vector<std::vector<double>> &sol, std::vector<std::vector<int>> *subsets);
+void DFS(const std::vector<std::vector<double>> &g, int v, int n, bool *seen, std::vector<int> *subset, bool *inserted);
 
 class subtourelim : public GRBCallback
 {
@@ -49,7 +49,7 @@ protected:
 				// 4. Libera memória alocada
 
 				// Found an integer feasible solution - does it visit every node?
-				vector<vector<double>> x(n, vector<double>(n, 0.0));
+				std::vector<std::vector<double>> x(n, std::vector<double>(n, 0.0));
 
 				for (int i = 0; i < n; i++)
 				{
@@ -59,31 +59,31 @@ protected:
 					}
 				}
 
-				vector<double> y(nd, 0.0);
+				std::vector<double> y(nd, 0.0);
 
 				for (int i = 0; i < nd; i++)
 				{
 					y[i] = getSolution(vars_d[i]);
 				}
 
-				vector<vector<int>> subsets;
+				std::vector<std::vector<int>> subsets;
 				findsubset(n, x, &subsets);
 
 				if (subsets.size() <= 1)
 					return;
 
-				vector<int> depots_on_subset;
+				std::vector<int> depots_on_subset;
 
 				// all strong connect components tha  does not contain the depot
-				vector<vector<int>> subsets_S;
+				std::vector<std::vector<int>> subsets_S;
 
 				// subset with base node
-				vector<int> not_S;
+				std::vector<int> not_S;
 
 				double obj_bnd = getDoubleInfo(GRB_CB_MIPSOL_OBJBND);
 				if (subsets.size() > 1)
 				{
-					vector<vector<int>> ordered_subsets;
+					std::vector<std::vector<int>> ordered_subsets;
 					// inserire o subset que possui a base no final
 					bool found_base = false;
 
@@ -160,18 +160,18 @@ protected:
 		}
 		catch (GRBException &e)
 		{
-			cout << "[subtourelim callback] Error number: " << e.getErrorCode() << endl;
-			cout << "[subtourelim callback] Message: " << e.getMessage() << endl;
+			std::cout << "[subtourelim callback] Error number: " << e.getErrorCode() << std::endl;
+			std::cout << "[subtourelim callback] Message: " << e.getMessage() << std::endl;
 		}
 		catch (...)
 		{
-			cout << "[subtourelim callback] Unknown error during callback" << endl;
+			std::cout << "[subtourelim callback] Unknown error during callback" << std::endl;
 		}
 	}
 };
 
 // busca em profundidade para encontrar os componentes conectados
-void DFS(const vector<vector<double>> &g, int v, int n, bool *seen, vector<int> *subset, bool *inserted)
+void DFS(const std::vector<std::vector<double>> &g, int v, int n, bool *seen, std::vector<int> *subset, bool *inserted)
 {
 	seen[v] = true;
 	for (int u = 0; u < n; u++)
@@ -194,13 +194,13 @@ void DFS(const vector<vector<double>> &g, int v, int n, bool *seen, vector<int> 
 // Dado uma solução inteira-viável'sol',
 // retorne os componetes conectados.
 void findsubset(int n,
-				vector<vector<double>> &sol,
-				vector<vector<int>> *subsets)
+				std::vector<std::vector<double>> &sol,
+				std::vector<std::vector<int>> *subsets)
 {
 	int i;
 
 	subsets->clear();
-	vector<int> subset;
+	std::vector<int> subset;
 
 	bool *node_seen = new bool[n];
 	for (i = 0; i < n; i++)
@@ -226,6 +226,18 @@ void findsubset(int n,
 	delete[] inserted;
 }
 
+
+
+Solution::Solution(SolverContext& ctx, Input& input_, int max_cvl_subset_num)
+    : Graph(input_, max_cvl_subset_num)
+{
+    initSol(ctx, &best_sol);
+    updateSolutionWithGlobalDepots(ctx, &best_sol);
+    isAtParetoSet(best_sol);
+    print_paretoSet();
+    initialSolution = false;
+}
+
 /**
  * @brief Calcula a solução inicial para todos os grupos de cobertura.
  *
@@ -238,27 +250,28 @@ void findsubset(int n,
  * @note O vetor de depots não inclui a base, pois esta não sofrerá modificações.
  */
 
-void Solution::initSol(solution *s)
+
+void Solution::initSol(SolverContext& ctx, solution *s)
 {
 	// 1. Inicializa variáveis para rastrear:
 	// - maxValue: maior custo individual de caminho (para identificar gargalos)
 	// - maxTime: maior tempo de otimização do Gurobi (para definir limites)
 	// - cost: custo acumulado de todos os caminhos
 
-	double maxValue = numeric_limits<double>::min(); // Menor valor possível para comparação
+	double maxValue = std::numeric_limits<double>::min(); // Menor valor possível para comparação
 	double maxTime = -1;
 	double cost = 0;
 	int maxCostPathID = 0;
 
-	set<int> globalDepots; // set<int> para globalDepots para evitar duplicatas automaticamente
+	std::set<int> globalDepots; // set<int> para globalDepots para evitar duplicatas automaticamente
 
 	// path p;
-	vector<path> paths;
+	std::vector<path> paths;
 	solution solTemp;
 
 	if (getNumberOfSets() == 0)
 	{
-		throw runtime_error("No coverage groups defined");
+		throw std::runtime_error("No coverage groups defined");
 	}
 
 	// 2. Para cada grupo de cobertura:
@@ -266,11 +279,11 @@ void Solution::initSol(solution *s)
 	// - Armazena o caminho e atualiza métricas globais
 	for (int i = 0; i < getNumberOfSets(); ++i)
 	{
-		path p = bestPath(i); // resolve a subrota via gurobi
+		path p = bestPath(ctx, i); // resolve a subrota via gurobi
 
 		if (p.pCost < 0)
 		{
-			throw runtime_error("Failed to build path for group " + to_string(i));
+			throw std::runtime_error("Failed to build path for group " + std::to_string(i));
 		}
 
 		paths.emplace_back(p); // Obter o melhor caminho para o grupo k
@@ -313,7 +326,7 @@ Solution::~Solution()
 
 // find best path for graph gID, returning Solution
 //  path's cost and the edges of path.
-Solution::path Solution::bestPath(int gID)
+Solution::path Solution::bestPath(SolverContext& ctx, int gID)
 {
 	int T, D, robotID, setID;
 	int subset_id = 0;
@@ -325,7 +338,7 @@ Solution::path Solution::bestPath(int gID)
 	solution vec_sol;
 	vec_sol.targetsNum = 0;
 	Set set_temp;
-	set<int> depots;
+	std::set<int> depots;
 
 	T = nodesSets[gID].cvLines.size() * 2;
 	D = nodesSets[gID].depots.size();
@@ -341,7 +354,7 @@ Solution::path Solution::bestPath(int gID)
 		set_temp = nodesSets[gID];
 
 		// sol = MILP(set_temp);
-		sol = milpSolver(set_temp, {});
+		sol = milpSolver(ctx, set_temp, {});
 
 		// muitas chamadas do gurobi, manteremos apenas a informação da última
 		// vec_call.clear();
@@ -372,7 +385,7 @@ Solution::path Solution::bestPath(int gID)
 
 			// calcular a solução
 			// sol = MILP(set_temp);
-			sol = milpSolver(set_temp, {});
+			sol = milpSolver(ctx, set_temp, {});
 
 			// muitas chamadas do gurobi, materemos apenas a informação da última
 			// vec_call.clear();
@@ -411,7 +424,7 @@ Solution::path Solution::bestPath(int gID)
 
 		// pass to gurobi as warm start
 		// sol = MILP_Warm_Start(set_temp, sol);
-		sol = milpSolver(set_temp, sol);
+		sol = milpSolver(ctx, set_temp, sol);
 
 		// vec_call.clear();
 		call_info.call_id = ++call_num;
@@ -435,7 +448,7 @@ Solution::path Solution::bestPath(int gID)
 
 // find best path for graph gID, returning Solution
 //  path's cost and the edges of path.
-Solution::path Solution::improvePath(path p)
+Solution::path Solution::improvePath(SolverContext& ctx,path p)
 {
 	std::chrono::time_point<std::chrono::system_clock> start, end;
 
@@ -445,7 +458,7 @@ Solution::path Solution::improvePath(path p)
 	solution vec_sol;
 	vec_sol.targetsNum = 0;
 	Set set_temp;
-	set<int> depots;
+	std::set<int> depots;
 
 	int gID = p.pID;
 
@@ -454,38 +467,49 @@ Solution::path Solution::improvePath(path p)
 
 	// pass to gurobi as warm start
 	// sol = MILP_Warm_Start(set_temp, p);
-
+	
 	/*exploring a bug in milpSolver*/
-	/*if (gID == 4)
+	/* (gID == 1)
 	{
 
 		set_temp.cvLines.clear();
-		set_temp.cvLines.emplace_back(9);
+		set_temp.cvLines.emplace_back(23);
+		set_temp.cvLines.emplace_back(21);
+		set_temp.cvLines.emplace_back(25);
+
 
 		set_temp.depots.clear();
+		set_temp.depots.emplace_back(31);
 		set_temp.depots.emplace_back(34);
-		set_temp.depots.emplace_back(40);
-		set_temp.depots.emplace_back(43);
-		set_temp.robotID = 0;
-		set_temp.set_id = 4;
+		set_temp.depots.emplace_back(39);
+		set_temp.depots.emplace_back(41);
+		set_temp.depots.emplace_back(42);
+		set_temp.depots.emplace_back(44);
+		set_temp.depots.emplace_back(53);
+		set_temp.depots.emplace_back(57);
+
+		set_temp.length = 38079.991999999998
+
+		set_temp.robotID = 3
+		set_temp.set_id = 1
 
 		p.edges.clear();
 		edge e;
 		vector<edge> edges;
 
 		e.node_a = 0;
-		e.node_b = 43;
-		e.time = 387.06;
-		e.cost = 1443.73;
+		e.node_b = 25
+		e.time = 197.42554715464891
+		e.cost = 592.27664146394670
 		edges.emplace_back(e);
 
-		e.node_a = 43;
-		e.node_b = 9;
-		e.time = 384.00;
-		e.cost = 1432.33;
+		e.node_a = 25;
+		e.node_b = 26;
+		e.time = 776.09887500000002;
+		e.cost = 2328.2966249999999;
 		edges.emplace_back(e);
 
-		e.node_a = 9;
+		e.node_a = 26
 		e.node_b = 10;
 		e.time = 786.42;
 		e.cost = 2933.37;
@@ -537,7 +561,7 @@ Solution::path Solution::improvePath(path p)
 		p.targetsNum = 2;
 	}*/
 
-	sol = milpSolver(set_temp, p);
+	sol = milpSolver(ctx, set_temp, p);
 
 	call_info.call_id = ++call_num;
 	call_info.T = set_temp.cvLines.size() * 2;
@@ -560,10 +584,11 @@ Solution::path Solution::improvePath(path p)
 
 // MILP solver for coverage set
 // returns a path with the best solution
-Solution::path Solution::milpSolver(Set nodes_set, path initial_sol)
+Solution::path Solution::milpSolver(SolverContext& ctx,const Set& nodes_set, const path& initial_sol)
 {
 	int i, j;
-
+	
+	
 	// Convert node set to the input format required by the MILP model
 	Convert_NS_to_CS(nodes_set);
 
@@ -582,12 +607,14 @@ Solution::path Solution::milpSolver(Set nodes_set, path initial_sol)
 	// Begin model construction
 	try
 	{
-		GRBModel model(env);
+		
+		GRBModel model(ctx.env());
 
 		// Gurobi performance parameters
-		model.set(GRB_IntParam_OutputFlag, 0);		// suppress solver output
+		//model.set(GRB_IntParam_OutputFlag, 0);		// suppress solver output
 		model.set(GRB_IntParam_LazyConstraints, 1); // enable lazy constraints
-		model.set(GRB_IntParam_Threads, 1);			// use all available CPU cores
+		//model.set(GRB_IntParam_Threads, 1);			// use all available CPU cores
+
 
 		// Multi-objective optimization setup
 		GRBVar var_Pmax = model.addVar(0.0, GRB_INFINITY, 0.0, GRB_CONTINUOUS, "vars_Pmax");
@@ -610,12 +637,12 @@ Solution::path Solution::milpSolver(Set nodes_set, path initial_sol)
 
 		// GRBVar **vars_x = NULL;
 		// vars_x = new GRBVar *[N];
-		vector<vector<GRBVar>> vars_x(N, vector<GRBVar>(N));
+		std::vector<std::vector<GRBVar>> vars_x(N, std::vector<GRBVar>(N));
 		// for (i = 0; i < N; i++)
 		// vars_x[i] = new GRBVar[N];
 
 		// GRBVar *vars_d = nullptr;
-		vector<GRBVar> vars_d(D - 1);
+		std::vector<GRBVar> vars_d(D - 1);
 		if (D > 1)
 			vars_d.resize(D - 1);
 		// vars_d = new GRBVar[D - 1];
@@ -630,7 +657,7 @@ Solution::path Solution::milpSolver(Set nodes_set, path initial_sol)
 		}
 		// Create decision variables z_ij for all edges (including self-loops)
 		// GRBVar **vars_z = new GRBVar *[N];
-		vector<vector<GRBVar>> vars_z(N, vector<GRBVar>(N));
+		std::vector<std::vector<GRBVar>> vars_z(N, std::vector<GRBVar>(N));
 		// for (i = 0; i < N; i++)
 		// vars_z[i] = new GRBVar[N];
 		for (i = 0; i < N; i++)
@@ -664,7 +691,7 @@ Solution::path Solution::milpSolver(Set nodes_set, path initial_sol)
 				}
 			}
 		}
-		string s = "Rest1";
+		std::string s = "Rest1";
 		model.addConstr(rest1 <= Elem[0], s);
 
 		/**************** Degree Constraints ***********************/
@@ -690,7 +717,7 @@ Solution::path Solution::milpSolver(Set nodes_set, path initial_sol)
 					rest2_2 += vars_x[i][d];
 				}
 			}
-			string s = "Rest2_d_" + itos(d);
+			std::string s = "Rest2_d_" + itos(d);
 			model.addConstr(rest2_1 == rest2_2, s);
 		}
 
@@ -764,7 +791,7 @@ Solution::path Solution::milpSolver(Set nodes_set, path initial_sol)
 			for (i = 0; i < N; i++)
 				if (i != j)
 					rest7 += vars_x[i][j];
-			string s = "Rest7_j_" + itos(j);
+			std::string s = "Rest7_j_" + itos(j);
 			model.addConstr(rest7 == 1, s);
 		}
 		// Constraint 8: For each target node j, ensure exactly one outgoing arc (sum over i of x_j_i = 1)
@@ -776,7 +803,7 @@ Solution::path Solution::milpSolver(Set nodes_set, path initial_sol)
 				if (i != j)
 					rest8 += vars_x[j][i];
 
-			string s = "Rest8_j_" + itos(j);
+			std::string s = "Rest8_j_" + itos(j);
 			model.addConstr(rest8 == 1, s);
 		}
 
@@ -802,7 +829,7 @@ Solution::path Solution::milpSolver(Set nodes_set, path initial_sol)
 					rest9_3 += cost_ij * vars_x[i][j];
 				}
 			}
-			string s = "Rest9_i_" + itos(i);
+			std::string s = "Rest9_i_" + itos(i);
 			// rest9_1 = total fuel leaving node i (outflow)
 			// rest9_2 = total fuel entering node i (inflow)
 			// rest9_3 = total fuel consumed on outgoing arcs from node i
@@ -824,7 +851,7 @@ Solution::path Solution::milpSolver(Set nodes_set, path initial_sol)
 				{
 					rest10_1 = vars_z[d][i];
 					rest10_2 = getCost(d, i) * vars_x[d][i];
-					string s = "Rest10_d_" + itos(d) + "_i_" + itos(i);
+					std::string s = "Rest10_d_" + itos(d) + "_i_" + itos(i);
 					model.addConstr(rest10_1 == rest10_2, s);
 				}
 			}
@@ -843,7 +870,7 @@ Solution::path Solution::milpSolver(Set nodes_set, path initial_sol)
 				{
 					rest11_1 = vars_z[i][j];
 					rest11_2 = (input.getRobotFuel(robotID) - get_min_fuel_2_depot(j)) * vars_x[i][j];
-					s = "Rest11_i_" + itos(i) + "_j_" + itos(j);
+					std::string s = "Rest11_i_" + itos(i) + "_j_" + itos(j);
 					model.addConstr(rest11_1 <= rest11_2, s);
 				}
 			}
@@ -862,7 +889,7 @@ Solution::path Solution::milpSolver(Set nodes_set, path initial_sol)
 				{
 					rest12_1 = vars_z[i][d];
 					rest12_2 = input.getRobotFuel(robotID) * vars_x[i][d];
-					s = "Rest12_i_" + itos(i) + "_d_" + itos(d);
+					std::string s = "Rest12_i_" + itos(i) + "_d_" + itos(d);
 					model.addConstr(rest12_1 <= rest12_2, s);
 				}
 			}
@@ -898,7 +925,7 @@ Solution::path Solution::milpSolver(Set nodes_set, path initial_sol)
 		{
 			GRBLinExpr rest14 = 0;
 			rest14 += vars_x[i][i + 1] + vars_x[i + 1][i];
-			string s = "Rest14_i_" + itos(i);
+			std::string s = "Rest14_i_" + itos(i);
 			model.addConstr(rest14 == 1, s);
 		}
 		// Constraint 15: sum X_i_i+1_k = Sum Sum X_i_j_k, i = 2,4,N
@@ -913,7 +940,7 @@ Solution::path Solution::milpSolver(Set nodes_set, path initial_sol)
 				if (i != j)
 					rest15_2 += vars_x[i][j];
 
-			string s = "Rest15_i_" + itos(i);
+			std::string s = "Rest15_i_" + itos(i);
 			model.addConstr(rest15_1 == rest15_2, s);
 		}
 
@@ -929,7 +956,7 @@ Solution::path Solution::milpSolver(Set nodes_set, path initial_sol)
 				if (i != j)
 					rest16_2 += vars_x[i][j];
 
-			string s = "Rest16_i_" + itos(i);
+			std::string s = "Rest16_i_" + itos(i);
 			model.addConstr(rest16_1 == rest16_2, s);
 		}
 		/********************Depot Constraint ***********************************************/
@@ -958,7 +985,7 @@ Solution::path Solution::milpSolver(Set nodes_set, path initial_sol)
 			double fuel;
 
 			// Create a matrix of initial values (0.0 by default)
-			vector<vector<double>> start_vals(N, vector<double>(N, 0.0));
+			std::vector<std::vector<double>> start_vals(N, std::vector<double>(N, 0.0));
 
 			// Loop through each edge in the initial solution
 			for (auto edge : initial_sol.edges)
@@ -1074,7 +1101,7 @@ Solution::path Solution::milpSolver(Set nodes_set, path initial_sol)
 			double total_path_cost = 0.0;
 
 			// Store output edges with associated commodity
-			vector<pair<int, edge>> grb_out;
+			std::vector<std::pair<int, edge>> grb_out;
 			edge e;
 
 			double v_x = 0;
@@ -1101,7 +1128,7 @@ Solution::path Solution::milpSolver(Set nodes_set, path initial_sol)
 						int index_j = getIndex(j);
 
 						// Interpreting v_z as a commodity ID
-						int commodity = static_cast<int>(round(v_z));
+						int commodity = static_cast<int>(std::round(v_z));
 
 						// Target node: insert remaining fuel information
 						if (j >= D) // D is the number of depots; j >= D means it is a target
@@ -1116,7 +1143,7 @@ Solution::path Solution::milpSolver(Set nodes_set, path initial_sol)
 							int id = getIndex(i);
 
 							if (mapNodesTypes[id] != 0)
-								cerr << "problem warm !\n";
+								std::cerr << "problem warm !\n";
 
 							sol.depots.insert(getIndex(i));
 						}
@@ -1133,11 +1160,11 @@ Solution::path Solution::milpSolver(Set nodes_set, path initial_sol)
 						total_path_cost += e.cost;
 
 						// Round number of times edge is used (e.g., in multi-commodity flow)
-						int n_arcs = static_cast<int>(round(v_x));
+						int n_arcs = static_cast<int>(std::round(v_x));
 
 						// Append the edge multiple times if needed
 						for (int x = 0; x < n_arcs; ++x)
-							grb_out.emplace_back(make_pair(commodity, e));
+							grb_out.emplace_back(std::make_pair(commodity, e));
 					}
 				}
 			}
@@ -1147,8 +1174,8 @@ Solution::path Solution::milpSolver(Set nodes_set, path initial_sol)
 
 			// Sort the list of edges by commodity value in descending order
 			// This ensures that higher-commodity paths are inserted first
-			sort(grb_out.begin(), grb_out.end(),
-				 [](pair<int, edge> el_1, pair<int, edge> el_2)
+			std::sort(grb_out.begin(), grb_out.end(),
+				 [](std::pair<int, edge> el_1, std::pair<int, edge> el_2)
 				 {
 					 return el_1.first > el_2.first;
 				 });
@@ -1165,7 +1192,7 @@ Solution::path Solution::milpSolver(Set nodes_set, path initial_sol)
 			//----------------------------------------- teste temporário para verificar se a capacidade do robô é mantida
 			if (!PathRestrictions(sol))
 			{
-				cout << "Invalid solution found: warm_start" << endl;
+				std::cout << "Invalid solution found: warm_start" << std::endl;
 				sol.pCost = -1;
 				sol.robotID = -1;
 				sol.pID = -1;
@@ -1198,12 +1225,12 @@ Solution::path Solution::milpSolver(Set nodes_set, path initial_sol)
 	}
 	catch (GRBException &e)
 	{
-		cout << "Error number: " << e.getErrorCode() << endl;
-		cout << e.getMessage() << endl;
+		std::cout << "Error number: " << e.getErrorCode() << std::endl;
+		std::cout << e.getMessage() << std::endl;
 	}
 	catch (...)
 	{
-		cout << "Error during optimization" << endl;
+		std::cout << "Error during optimization" << std::endl;
 	}
 
 	// Return either the valid solution or a placeholder with pCost = -1 for infeasibility
@@ -1216,28 +1243,27 @@ Solution::path Solution::Union_Solutions(solution vec_sol)
 	path union_paths;
 	path union_paths_temp;
 
-	list<pair<pair<edge, edge>, int>> in_out_vec;
-	list<pair<edge, edge>> in_out_vec_temp;
+	std::list<std::pair<std::pair<edge, edge>, int>> in_out_vec;
+	std::list<std::pair<edge, edge>> in_out_vec_temp;
 
-	list<pair<pair<edge, edge>, int>> set_order;
-	list<pair<edge, edge>> set_order_temp;
-
+	std::list<std::pair<std::pair<edge, edge>, int>> set_order;
+	std::list<std::pair<edge, edge>> set_order_temp;
 	union_paths.robotID = vec_sol.paths.front().robotID;
 	union_paths.pID = vec_sol.paths.front().pID;
 
 	int group_id = 0;
 	// inserir as entradas e saídas dos caminhos na lista
 	for (path p : vec_sol.paths)
-		in_out_vec.emplace_back(make_pair(make_pair(p.edges.front(), p.edges.back()), group_id++));
+		in_out_vec.emplace_back(std::make_pair(std::make_pair(p.edges.front(), p.edges.back()), group_id++));
 
 	// obter a saída que está mais a esquerda;
 	// posicionar o par que tem a linha de saída mais a esquerda no eixo x, no início do vetor
 	// most left line
-	double mll = numeric_limits<double>::max();
+	double mll = std::numeric_limits<double>::max();
 	auto it_pair = in_out_vec.begin();
 	auto it_in_out = in_out_vec.begin();
 
-	pair<pair<edge, edge>, int> pair_mli;
+	std::pair<std::pair<edge, edge>, int> pair_mli;
 
 	double x_coord;
 	int in_node;
@@ -1270,7 +1296,7 @@ Solution::path Solution::Union_Solutions(solution vec_sol)
 	// classificar os pares em relação a saída e entrada de dois pares diferentes,
 	// iniciar do início da lista, buscar o par que possui a entrada mais próxima da saída do par anterior.
 	double cost;
-	double min_cost = numeric_limits<double>::max();
+	double min_cost = std::numeric_limits<double>::max();
 	it_in_out = in_out_vec.begin();
 	auto it_set_order = set_order.begin();
 	auto it_near_set = in_out_vec.begin();
@@ -1295,7 +1321,7 @@ Solution::path Solution::Union_Solutions(solution vec_sol)
 			set_order.emplace_back(*it_near_set);
 			in_out_vec.erase(it_near_set);
 			it_in_out = in_out_vec.begin();
-			min_cost = numeric_limits<double>::max();
+			min_cost = std::numeric_limits<double>::max();
 			it_set_order++;
 			continue;
 		}
@@ -1362,8 +1388,8 @@ bool Solution::swap(solution *s)
 		int g2Index;
 		int g1LID;
 		int g2LID;
-		string path_op_g1;
-		string path_op_g2;
+		std::string path_op_g1;
+		std::string path_op_g2;
 		double time_op_g1;
 		double time_op_g2;
 	};
@@ -1373,22 +1399,21 @@ bool Solution::swap(solution *s)
 
 	solution solTemp = *s;
 
-	vector<path> swapPathLines;
+	std::vector<path> swapPathLines;
 	swapPathLines = s->paths;
-	vector<int> depots;
+	std::vector<int> depots;
 
-	map<double, swapSol> mapCostSwapSol;
-
+	std::map<double, swapSol> mapCostSwapSol;
 	std::chrono::time_point<std::chrono::system_clock> start1, end1;
 	std::chrono::time_point<std::chrono::system_clock> start2, end2;
 
 	// vetor de previsões
-	vector<pair<double, swapSol>> predictions_sol;
+	std::vector<std::pair<double, swapSol>> predictions_sol;
 	swapSol sol;
 
 	// get index of graphs in random order
-	vector<int> graphsIndex = rand.randVector(getNumberOfSets());
-	vector<int> g1LinesIndex, g2LinesIndex;
+	std::vector<int> graphsIndex = rand.randVector(getNumberOfSets());
+	std::vector<int> g1LinesIndex, g2LinesIndex;
 
 	int lineG1;
 	int lineG2;
@@ -1398,8 +1423,8 @@ bool Solution::swap(solution *s)
 
 	double maxCost = 0;
 
-	pair<path, string> path_op_g1;
-	pair<path, string> path_op_g2;
+	std::pair<path, std::string> path_op_g1;
+	std::pair<path, std::string> path_op_g2;
 
 	path p1R, p1I, p2R, p2I;
 
@@ -1496,7 +1521,7 @@ bool Solution::swap(solution *s)
 				sol.path_op_g2.clear();
 
 				// obter o maior valor entre os novos caminho p1 e p2 após as devidas remoções e inserções
-				maxCost = max(p1I.pCost, p2I.pCost);
+				maxCost = std::max(p1I.pCost, p2I.pCost);
 
 				// obter as informação das modificações
 				sol.g1Index = g1Index;
@@ -1512,7 +1537,7 @@ bool Solution::swap(solution *s)
 
 				// inserir as informações e o resultado no vetor
 				mapCostSwapSol.emplace(maxCost, sol);
-				predictions_sol.emplace_back(make_pair(maxCost, sol));
+				predictions_sol.emplace_back(std::make_pair(maxCost, sol));
 
 				if (maxCost < solTemp.maxCost)
 				{
@@ -1524,7 +1549,7 @@ bool Solution::swap(solution *s)
 
 	// ordenar o vetor de previsões com base no custo.
 	sort(predictions_sol.begin(), predictions_sol.end(),
-		 [](pair<double, swapSol> el_1, pair<double, swapSol> el_2)
+		 [](std::pair<double, swapSol> el_1, std::pair<double, swapSol> el_2)
 		 {
 			 return el_1.first < el_2.first;
 		 });
@@ -1583,14 +1608,14 @@ bool Solution::swap(solution *s)
 				// changed the paths:update tempSol cost and depotsNum;
 				updateSolCosts(&solTemp);
 				// se o maior custo de shiftPath  for menor que o maior custo da solução corrente
-				if (isDefinitelyGreaterThan(max(s->paths[g1].pCost, s->paths[g2].pCost),
-											max(solTemp.paths[g1].pCost, solTemp.paths[g2].pCost), 1.0) ||
+				if (isDefinitelyGreaterThan(std::max(s->paths[g1].pCost, s->paths[g2].pCost),
+											std::max(solTemp.paths[g1].pCost, solTemp.paths[g2].pCost), 1.0) ||
 					(s->depotsNum > solTemp.depotsNum))
 				{
 
 					// insere na fronteira e retorna apenas se melhorar o custo
-					if (isDefinitelyGreaterThan(max(s->paths[g1].pCost, s->paths[g2].pCost),
-												max(solTemp.paths[g1Index].pCost, solTemp.paths[g2].pCost), 1.0))
+					if (isDefinitelyGreaterThan(std::max(s->paths[g1].pCost, s->paths[g2].pCost),
+												std::max(solTemp.paths[g1Index].pCost, solTemp.paths[g2].pCost), 1.0))
 					{
 
 						if (isDefinitelyGreaterThan(s->maxCost, solTemp.maxCost, 1.0))
@@ -1639,12 +1664,14 @@ bool Solution::swap(solution *s)
 }
 
 // for each graph, choose a line to remove and insert it in an other graph randomly choosed.
-bool Solution::shift(solution *s)
+//bool Solution::shift(solution *s)
+bool Solution::shift()
+
 {
 	path pathG1;
 	path pathG2;
-	vector<int> depots;
-	pair<path, string> path_op;
+	std::vector<int> depots;
+	std::pair<path, std::string> path_op;
 
 	struct pathIndex
 	{
@@ -1653,7 +1680,7 @@ bool Solution::shift(solution *s)
 		int g1Index;
 		int g2Index;
 		int g1LID;
-		string path_op;
+		std::string path_op;
 		double shift_time;
 	};
 
@@ -1661,18 +1688,21 @@ bool Solution::shift(solution *s)
 
 	std::chrono::time_point<std::chrono::system_clock> start, end;
 
-	map<double, pathIndex> mapCostPaths;
+	std::map<double, pathIndex> mapCostPaths;
 
 	int line = -1;
 	int iLine = 0;
-	solution solTemp = *s;
+	Solution& s = *this;
+	// cria cópia da solução interna
+	Solution::solution solTemp = s.currentSol;
+	
 
 	int g1, g2, g1LID;
 
 	bool found_best_sol = false;
 
 	// get index of graphs in random order
-	vector<int> graphsIndex = rand.randVector(getNumberOfSets());
+	std::vector<int> graphsIndex = rand.randVector(getNumberOfSets());
 	int nOfCLines;
 
 	// copy current solution groups operators: nodesSets and coverageSets
@@ -1688,7 +1718,7 @@ bool Solution::shift(solution *s)
 		return false;
 
 	// obter os índices das linhas de cobertura de maneira embaralhada.
-	vector<int> vLines = rand.randVector(nOfCLines);
+	std::vector<int> vLines = rand.randVector(nOfCLines);
 	while (!vLines.empty())
 	{ // enquanto não testar todas as linhas
 
@@ -1745,7 +1775,7 @@ bool Solution::shift(solution *s)
 					continue;
 				}
 
-				double maxCost = max(pathG2.pCost, pathG1.pCost);
+				double maxCost = std::max(pathG2.pCost, pathG1.pCost);
 				pIndex.g1Index = g1Index;
 				pIndex.g2Index = g2Index;
 				pIndex.g1LID = iLine;
@@ -1814,14 +1844,14 @@ bool Solution::shift(solution *s)
 
 					if (pathG1.pCost <= 0)
 					{
-						solTemp = *s;
+						solTemp = s.currentSol;
 						// restoreNSets();
 						continue;
 					}
 
 					if (!PathRestrictions(pathG1))
 					{
-						solTemp = *s;
+						solTemp = s.currentSol;
 						continue;
 					}
 
@@ -1834,12 +1864,12 @@ bool Solution::shift(solution *s)
 					insert_vecSol(solTemp);
 
 					// update current solution s
-					*s = solTemp;
+					s.currentSol = solTemp;
 
 					depots.clear();
 					// inserir um possível atualização de depots no nodesSet
-					depots.insert(depots.end(), s->depots.begin(), s->depots.end());
-					for (uint i = 0; i < s->paths.size(); ++i)
+					depots.insert(depots.end(), s.currentSol.depots.begin(), s.currentSol.depots.end());
+					for (uint i = 0; i < s.currentSol.paths.size(); ++i)
 					{
 						UpdateDepots(i, depots);
 					}
@@ -1863,7 +1893,7 @@ bool Solution::shift(solution *s)
 					return true;
 				}
 				// back solTemp to current solution
-				solTemp = *s;
+				solTemp = s.currentSol;
 				// restore current solution groups operators: nodesSets and coverageSets
 				// restoreNSets();
 			}
@@ -1875,23 +1905,23 @@ bool Solution::shift(solution *s)
 	return false;
 }
 
-bool Solution::improveSol(solution *s)
+bool Solution::improveSol(SolverContext& ctx,solution *s)
 {
 	path imp_path;
-	vector<path> imp_sol;
+	std::vector<path> imp_sol;
 	solution solTemp;
 	double cost = 0;
 	int maxCostPathID = -1;
-	double maxCost = numeric_limits<double>::min();
+	double maxCost = std::numeric_limits<double>::min();
 
-	set<int> globalDepots;
-	vector<int> depots;
+	std::set<int> globalDepots;
+	std::vector<int> depots;
 	int targets_num = 0;
 
 	for (uint i = 0; i < s->paths.size(); ++i)
 	{
 
-		imp_path = improvePath(s->paths[i]);
+		imp_path = improvePath(ctx, s->paths[i]);
 		if (imp_path.pID == -1 || imp_path.pCost < 0 || imp_path.edges.empty())
 			return false;
 
@@ -1996,15 +2026,14 @@ bool Solution::swapRobots(solution *s)
 	// obter quantidade  de tipos de robôs;
 	int robotsTypes = getMapRobotGroupSize();
 
-	vector<int> t1Groups;
-	vector<int> t2Groups;
-	set<int> setT1;
-	set<int> setT2;
+	std::vector<int> t1Groups;
+	std::vector<int> t2Groups;
+	std::set<int> setT1;
+	std::set<int> setT2;
 
 	path pathG1;
 	path pathG2;
-	vector<int> depots;
-
+	std::vector<int> depots;
 	copyNSets();
 
 	// max cost path
@@ -2016,7 +2045,7 @@ bool Solution::swapRobots(solution *s)
 	// tipo do robô do maior caminho
 	int t1 = GetGroupOfRobot(max_p);
 
-	vector<int> randRobotTypesIDs = rand.randVector(robotsTypes);
+	std::vector<int> randRobotTypesIDs = rand.randVector(robotsTypes);
 
 	// testar se é possível substituir em dois caminhos mc)id e algum de g2 o tipo de robô.
 	for (int t2 : randRobotTypesIDs)
@@ -2097,7 +2126,7 @@ bool Solution::swapRobots(solution *s)
 // obter o índice do depot mais próximo.
 int Solution::GetCloserDepot(path p, int depot_to_close)
 {
-	vector<pair<int, double>> depot_distances;
+	std::vector<std::pair<int, double>> depot_distances;
 	double distance;
 
 	// encontrar o depot na lista
@@ -2114,13 +2143,13 @@ int Solution::GetCloserDepot(path p, int depot_to_close)
 			{
 				distance = getCostOnGraph(p.robotID, depot_to_close, depot_id);
 				// inserir a distância e o id do depot no vetor
-				depot_distances.emplace_back(make_pair(depot_id, distance));
+				depot_distances.emplace_back(std::make_pair(depot_id, distance));
 			}
 		}
 
 		// ordenar da menor distância para a maior
-		sort(depot_distances.begin(), depot_distances.end(),
-			 [](pair<int, double> el_1, pair<int, double> el_2)
+		std::sort(depot_distances.begin(), depot_distances.end(),
+			 [](std::pair<int, double> el_1, std::pair<int, double> el_2)
 			 { return el_1.second < el_2.second; });
 
 		// retorna o id do depot mais próximo
@@ -2157,7 +2186,7 @@ Solution::path Solution::GetPathWithDepotClosure(path p, int depot_to_close)
 	//-------------------------teste temporário da saída------------------------------------
 	if (path_temp.pCost > 0)
 		if (!PathRestrictions(path_temp))
-			cout << "Problema restrição getPath with depot closure" << endl;
+			std::cout << "Problema restrição getPath with depot closure" << std::endl;
 	//------------------------------------------------------------------------------------
 
 	return path_temp;
@@ -2267,7 +2296,7 @@ Solution::path Solution::CloseDepotLinkToNext(path p, int depot_to_close, int ne
 
 	//-------------------------------------------teste temporário da saída---------------------------------------
 	if (!PathRestrictions(p))
-		cout << "problema restrições closedepot link to next" << endl;
+		std::cout << "problema restrições closedepot link to next" << std::endl;
 	//-------------------------------------------------------------------------------------------------
 
 	return p;
@@ -2278,12 +2307,12 @@ bool Solution::closeRandomDepot(solution *s)
 	solution solTemp = *s;
 
 	// get map of depots open to every group(path)
-	map<int, set<int>> mapDG = getMapDG(solTemp);
+	std::map<int, std::set<int>> mapDG = getMapDG(solTemp);
 
-	vector<int> openDepots;
+	std::vector<int> openDepots;
 
-	vector<int> depots;
-	vector<int> udepots;
+	std::vector<int> depots;
+	std::vector<int> udepots;
 
 	depots.clear();
 
@@ -2294,7 +2323,7 @@ bool Solution::closeRandomDepot(solution *s)
 	int nDepots = solTemp.depots.size();
 
 	// get a index of opendepots in random order
-	vector<int> idVector = rand.randVector(nDepots);
+	std::vector<int> idVector = rand.randVector(nDepots);
 
 	// save depots opened
 	copyNSets();
@@ -2321,7 +2350,7 @@ bool Solution::closeRandomDepot(solution *s)
 		uint closure = 0;
 
 		// get all groups that use the depot
-		set<int> gSet = mapDG.find(depotID)->second;
+		std::set<int> gSet = mapDG.find(depotID)->second;
 
 		// get depots graph
 
@@ -2390,11 +2419,11 @@ bool Solution::closeRandomDepot(solution *s)
 	return false;
 }
 
-vector<pair<int, int>> Solution::GetPrevNextNodes(path p, int node_id)
+std::vector<std::pair<int, int>> Solution::GetPrevNextNodes(path p, int node_id)
 {
 
-	pair<int, int> p_nodes;
-	vector<pair<int, int>> v_pnodes;
+	std::pair<int, int> p_nodes;
+	std::vector<std::pair<int, int>> v_pnodes;
 	for (edge e : p.edges)
 	{
 		if (e.node_b == node_id)
@@ -2411,9 +2440,9 @@ vector<pair<int, int>> Solution::GetPrevNextNodes(path p, int node_id)
 
 Solution::path Solution::RemoveDepotFromPath(path p, int node_id)
 {
-	// vector<pair<int,int>> v_pnodes = GetPrevNextNodes(p,node_id);
+	// std::vector<std::pair<int,int>> v_pnodes = GetPrevNextNodes(p,node_id);
 
-	list<edge> edges;
+	std::list<edge> edges;
 
 	// aresta para controlar possível loop caso a aresta anterior já tenha sido modificada
 	edge prev_changed_edge;
@@ -2640,7 +2669,7 @@ Solution::path Solution::RemoveDepotFromPath(path p, int node_id)
 	p.edges.insert(p.edges.begin(), edges.begin(), edges.end());
 
 	// update depots to only the ones used;
-	set<int> depots;
+	std::set<int> depots;
 	// for(auto e:p.edges){
 	// if(!input.isTarget(e.node_b) && e.node_b != input.getRobotBaseId(p.robotID))
 	// depots.insert(e.node_b);
@@ -2652,7 +2681,7 @@ Solution::path Solution::RemoveDepotFromPath(path p, int node_id)
 
 	//----------------------------teste temporário da saída-----------------------------------------
 	if (!PathRestrictions(p))
-		cout << "problema capacidade do robô removedepot" << endl;
+		std::cout << "problema capacidade do robô removedepot" << std::endl;
 	//-------------------------------------------------------------------------------------------
 
 	return p;
@@ -2661,7 +2690,7 @@ Solution::path Solution::RemoveDepotFromPath(path p, int node_id)
 void Solution::updateSolCosts(solution *s)
 {
 	// update depotsNum;
-	double maxCost = numeric_limits<double>::min();
+	double maxCost = std::numeric_limits<double>::min();
 
 	double sCost = 0;
 	int maxCostPathID = 0;
@@ -2690,10 +2719,10 @@ void Solution::updateSolCosts(solution *s)
 // print all graphs costs. This is a solution.
 void Solution::printSol(solution s)
 {
-	cout << "Sol:" << " dNum:" << s.depotsNum << " tNum:" << s.targetsNum << " mCost:" << s.maxCost << "\n";
+	std::cout << "Sol:" << " dNum:" << s.depotsNum << " tNum:" << s.targetsNum << " mCost:" << s.maxCost << "\n";
 	for (path i : s.paths)
-		cout << "P_" << i.pID << "[" << i.pCost << ", " << i.robotID << ", " << i.targetsNum << "];";
-	cout << "\n";
+		std::cout << "P_" << i.pID << "[" << i.pCost << ", " << i.robotID << ", " << i.targetsNum << "];";
+	std::cout << "\n";
 }
 
 double Solution::getMaxSolCost()
@@ -2702,12 +2731,12 @@ double Solution::getMaxSolCost()
 }
 
 // get depots open for refueling
-vector<int> Solution::getOpenDepots()
+std::vector<int> Solution::getOpenDepots()
 {
 
-	vector<int> solNodes;
-	vector<int> result(graphDepotsIndexes.size());
-	vector<int>::iterator it;
+	std::vector<int> solNodes;
+	std::vector<int> result(graphDepotsIndexes.size());
+	std::vector<int>::iterator it;
 
 	for (path s : currentSol.paths)
 	{
@@ -2732,12 +2761,12 @@ vector<int> Solution::getOpenDepots()
 
 void Solution::mapOpenDepotsToGroup()
 {
-	vector<int> solNodes;
-	vector<int> result(graphDepotsIndexes.size());
-	vector<int>::iterator it;
+	std::vector<int> solNodes;
+	std::vector<int> result(graphDepotsIndexes.size());
+	std::vector<int>::iterator it;
 
 	// map node into group
-	map<int, set<int>> mapNG;
+	std::map<int, std::set<int>> mapNG;
 
 	auto itMap = mapNG.end();
 
@@ -2746,14 +2775,14 @@ void Solution::mapOpenDepotsToGroup()
 		for (edge e : s.edges)
 		{
 			solNodes.push_back(e.node_a);
-			auto a = make_pair(e.node_a, solNodes);
-			itMap = mapNG.emplace_hint(itMap, e.node_a, set<int>());
+			auto a = std::make_pair(e.node_a, solNodes);
+			itMap = mapNG.emplace_hint(itMap, e.node_a, std::set<int>());
 			itMap->second.insert(s.pID);
 		}
 	}
-	sort(solNodes.begin(), solNodes.end());
+	std::sort(solNodes.begin(), solNodes.end());
 
-	it = set_intersection(solNodes.begin(), solNodes.end(), graphDepotsIndexes.begin(), graphDepotsIndexes.end(), result.begin());
+	it = std::set_intersection(solNodes.begin(), solNodes.end(), graphDepotsIndexes.begin(), graphDepotsIndexes.end(), result.begin());
 	result.resize(it - result.begin());
 
 	// create a map only with depot to the groups ids: mapDG
@@ -2780,10 +2809,10 @@ void Solution::mapOpenDepotsToGroup()
 /*return map of depots with their groups ids
  * one depot can be accessed by more than one robot
  * the robots bases are not included at map */
-map<int, set<int>> Solution::getMapDG(solution s)
+std::map<int, std::set<int>> Solution::getMapDG(solution s)
 {
 	// map only depots into group
-	map<int, set<int>> mapDG;
+	std::map<int, std::set<int>> mapDG;
 	auto itMap = mapDG.end();
 
 	// map all nodes to solution ID
@@ -2792,7 +2821,7 @@ map<int, set<int>> Solution::getMapDG(solution s)
 		for (int depotID : p.depots)
 		{
 			// insert <depot:group> into mapDG
-			itMap = mapDG.emplace_hint(itMap, depotID, set<int>());
+			itMap = mapDG.emplace_hint(itMap, depotID, std::set<int>());
 			itMap->second.insert(p.pID);
 		}
 	}
@@ -2802,12 +2831,12 @@ map<int, set<int>> Solution::getMapDG(solution s)
 /*Get all open depots and calculate the routes considering all depots at all groups
  * Update the nodeSet and currentSol
  * */
-void Solution::updateSolutionWithGlobalDepots(solution *s)
+void Solution::updateSolutionWithGlobalDepots(SolverContext& ctx, solution *s)
 {
 	double maxTime = -1;
 	double gurobiTime = gurobi_time_limit;
-	vector<int> depots;
-	set<int> groups;
+	std::vector<int> depots;
+	std::set<int> groups;
 	path pathTemp;
 
 	// number of paths
@@ -2817,7 +2846,7 @@ void Solution::updateSolutionWithGlobalDepots(solution *s)
 	gurobi_time_limit = 3600;
 
 	// get map of depots open to every group
-	map<int, set<int>> mapDG = getMapDG(*s);
+	std::map<int, std::set<int>> mapDG = getMapDG(*s);
 
 	// insert all open depots ids on depots vector
 	for (auto itmap = mapDG.begin(); itmap != mapDG.end(); ++itmap)
@@ -2837,7 +2866,7 @@ void Solution::updateSolutionWithGlobalDepots(solution *s)
 
 		// update only the groups with more than one depots
 		// considering new depots
-		pathTemp = bestPath(*itset);
+		pathTemp = bestPath(ctx, *itset);
 
 		// se a solução não for viável;
 		if (pathTemp.pCost < 0)
@@ -2894,7 +2923,7 @@ void Solution::eval_VecSol()
 			insert_solution(s);
 			continue;
 		}
-		map<int, vector<int>> mapEval = eval_solution(s);
+		std::map<int, std::vector<int>> mapEval = eval_solution(s);
 		if (mapEval.find(1) != mapEval.end() || mapEval.find(2) != mapEval.end())
 			update_paretoSet(mapEval, s);
 	}
@@ -2903,7 +2932,7 @@ void Solution::eval_VecSol()
 // insert solution s at paretoSet
 void Solution::insert_solution(solution s)
 {
-	paretoSet.emplace_back(make_pair(false, s));
+	paretoSet.emplace_back(std::make_pair(false, s));
 }
 
 // insert solution at vecSol
@@ -2917,7 +2946,7 @@ void Solution::clear_vecSol()
 }
 
 // erase paretoSet solution pointed with an iterator
-void Solution::erase_solution(vector<pair<bool, solution>>::iterator solIt)
+void Solution::erase_solution(std::vector<std::pair<bool, solution>>::iterator solIt)
 {
 	paretoSet.erase(solIt);
 }
@@ -2937,9 +2966,9 @@ Solution::solution Solution::get_random_solution()
 
 bool Solution::HasSolutionNotVisited()
 {
-	sort(paretoSet.begin(), paretoSet.end(), [](const pair<bool, solution> el1, const pair<bool, solution> el2)
+	std::sort(paretoSet.begin(), paretoSet.end(), [](const std::pair<bool, solution> el1, const std::pair<bool, solution> el2)
 		 { return el1.first < el2.first; });
-	for (pair<bool, solution> p : paretoSet)
+	for (std::pair<bool, solution> p : paretoSet)
 	{
 		// se não foi visitado, retornar true;
 		if (!p.first)
@@ -2953,7 +2982,7 @@ Solution::solution Solution::get_solution_not_visited()
 {
 	solution s;
 	s.maxCost = -1;
-	sort(paretoSet.begin(), paretoSet.end(), [](const pair<bool, solution> el1, const pair<bool, solution> el2)
+	std::sort(paretoSet.begin(), paretoSet.end(), [](const std::pair<bool, solution> el1, const std::pair<bool, solution> el2)
 		 { return el1.first < el2.first; });
 	if (!paretoSet.front().first)
 	{
@@ -2968,14 +2997,14 @@ Solution::solution Solution::get_solution_not_visited()
 // 0 if newSol is dominated by paretoSet solution.
 // 1 if newSol doesn't dominate the paretoSet solution, but neither solution dominate newSol
 // 2 if newSol dominates some paretoSet soltution's. At this case all ids of dominated solutions are returned within the map vector.
-map<int, vector<int>> Solution::eval_solution(Solution::solution newSol)
+std::map<int, std::vector<int>> Solution::eval_solution(Solution::solution newSol)
 {
-	map<int, vector<int>> mapEval;
+	std::map<int, std::vector<int>> mapEval;
 	auto itMap = mapEval.end();
 	int position = 0;
 	bool almostEqual, greaterThan, lessThan;
 
-	for (pair<bool, solution> ps : paretoSet)
+	for (std::pair<bool, solution> ps : paretoSet)
 	{
 		solution psSol = ps.second;
 
@@ -2986,7 +3015,7 @@ map<int, vector<int>> Solution::eval_solution(Solution::solution newSol)
 		// if solution is dominated for psSol
 		if ((almostEqual || greaterThan) && newSol.depotsNum >= psSol.depotsNum)
 		{
-			itMap = mapEval.emplace_hint(itMap, 0, vector<int>());
+			itMap = mapEval.emplace_hint(itMap, 0, std::vector<int>());
 			itMap->second.emplace_back(position);
 			break;
 		}
@@ -2997,13 +3026,13 @@ map<int, vector<int>> Solution::eval_solution(Solution::solution newSol)
 			// if solution dominates psSol: insert all dominated solution at map
 			if ((almostEqual || lessThan) && newSol.depotsNum <= psSol.depotsNum)
 			{
-				itMap = mapEval.emplace_hint(itMap, 2, vector<int>());
+				itMap = mapEval.emplace_hint(itMap, 2, std::vector<int>());
 				itMap->second.emplace_back(position);
 			}
 			// if solution does not dominate psSol, but isn't dominated.
 			else
 			{
-				itMap = mapEval.emplace_hint(itMap, 1, vector<int>());
+				itMap = mapEval.emplace_hint(itMap, 1, std::vector<int>());
 				itMap->second.emplace_back(position);
 			}
 		}
@@ -3014,16 +3043,16 @@ map<int, vector<int>> Solution::eval_solution(Solution::solution newSol)
 }
 
 // return an iterator of paretoSet's solution at solID position
-vector<pair<bool, Solution::solution>>::iterator Solution::getSolIterator(int solID)
+std::vector<std::pair<bool, Solution::solution>>::iterator Solution::getSolIterator(int solID)
 {
 	return paretoSet.begin() + solID;
 }
 
 // update paretoSet if necessary.
-void Solution::update_paretoSet(map<int, vector<int>> mapEval, solution s)
+void Solution::update_paretoSet(std::map<int, std::vector<int>> mapEval, solution s)
 {
 
-	for (pair<int, vector<int>> map : mapEval)
+	for (std::pair<int, std::vector<int>> map : mapEval)
 	{
 		// if solution s is dominated break
 		if (map.first == 0)
@@ -3057,9 +3086,9 @@ void Solution::update_paretoSet(map<int, vector<int>> mapEval, solution s)
 // print all solutions at paretoSet
 void Solution::print_paretoSet()
 {
-	for (pair<bool, solution> sol : paretoSet)
+	for (std::pair<bool, solution> sol : paretoSet)
 	{
-		cout << "depotNum: " << sol.second.depotsNum << " Maior custo: " << sol.second.maxCost << endl;
+		std::cout << "depotNum: " << sol.second.depotsNum << " Maior custo: " << sol.second.maxCost << std::endl;
 	}
 }
 
@@ -3075,7 +3104,7 @@ bool Solution::isAtParetoSet(solution s)
 		return true;
 	}
 
-	map<int, vector<int>> mapEval = eval_solution(s);
+	std::map<int, std::vector<int>> mapEval = eval_solution(s);
 	if (mapEval.find(1) != mapEval.end() || mapEval.find(2) != mapEval.end())
 	{
 		update_paretoSet(mapEval, s);
@@ -3088,10 +3117,10 @@ bool Solution::isAtParetoSet(solution s)
 void Solution::solutionToNodesSet(solution s)
 {
 
-	vector<Set> nwNodesSets;
-	vector<int> nodes;
-	vector<int> depots;
-	vector<int> targets;
+	std::vector<Set> nwNodesSets;
+	std::vector<int> nodes;
+	std::vector<int> depots;
+	std::vector<int> targets;
 	// int base =0;
 	int type = 0;
 
@@ -3126,7 +3155,7 @@ void Solution::solutionToNodesSet(solution s)
 
 		// it's not necessary push the baseID on nodesSet, this operation is done at updateSetNodesCosts
 		// depots.emplace_back(base);
-		sort(targets.begin(), targets.end());
+		std::sort(targets.begin(), targets.end());
 
 		// if smaller target is even
 		if (targets.front() % 2 == 0)
@@ -3157,9 +3186,9 @@ void Solution::solutionToNodesSet(solution s)
 Solution::Set Solution::PathToNodesSet(path p)
 {
 	Set nwNodesSets;
-	vector<int> nodes;
-	vector<int> depots;
-	vector<int> targets;
+	std::vector<int> nodes;
+	std::vector<int> depots;
+	std::vector<int> targets;
 	// int base =0;
 	int type = 0;
 
@@ -3188,7 +3217,7 @@ Solution::Set Solution::PathToNodesSet(path p)
 
 	// it's not necessary push the baseID on nodesSet, this operation is done at updateSetNodesCosts
 	// depots.emplace_back(base);
-	sort(targets.begin(), targets.end());
+	std::sort(targets.begin(), targets.end());
 
 	// if smaller target is even
 	if (targets.front() % 2 == 0)
@@ -3215,11 +3244,11 @@ Solution::Set Solution::PathToNodesSet(path p)
 	return nwNodesSets;
 }
 
-vector<int> Solution::getClosedDepots(solution s)
+std::vector<int> Solution::getClosedDepots(solution s)
 {
-	vector<int> openDepots;
-	vector<int> closedDepots(graphDepotsIndexes.size());
-	vector<int>::iterator it;
+	std::vector<int> openDepots;
+	std::vector<int> closedDepots(graphDepotsIndexes.size());
+	std::vector<int>::iterator it;
 
 	// get depots IDs
 	openDepots.insert(openDepots.end(), s.depots.begin(), s.depots.end());
@@ -3256,9 +3285,9 @@ void Solution::perturbation(solution *s, int maxDepots)
 
 bool Solution::hasAllTargets(solution s)
 {
-	vector<int> vnodes;
-	vector<int> diff(graphTargetsIndexes.size());
-	vector<int>::iterator it;
+	std::vector<int> vnodes;
+	std::vector<int> diff(graphTargetsIndexes.size());
+	std::vector<int>::iterator it;
 
 	for (path p : s.paths)
 	{
@@ -3268,7 +3297,7 @@ bool Solution::hasAllTargets(solution s)
 		}
 	}
 
-	sort(vnodes.begin(), vnodes.end());
+	std::sort(vnodes.begin(), vnodes.end());
 	// get the complement of openDepots
 	it = set_difference(graphTargetsIndexes.begin(), graphTargetsIndexes.end(),
 						vnodes.begin(), vnodes.end(), diff.begin());
@@ -3283,10 +3312,10 @@ bool Solution::hasAllTargets(solution s)
 
 void Solution::checkTargetPath(int gid, path p)
 {
-	vector<int> vnodes;
-	vector<int> targets;
-	vector<int> diff(graphTargetsIndexes.size());
-	vector<int>::iterator it;
+	std::vector<int> vnodes;
+	std::vector<int> targets;
+	std::vector<int> diff(graphTargetsIndexes.size());
+	std::vector<int>::iterator it;
 
 	for (edge e : p.edges)
 	{
@@ -3301,8 +3330,8 @@ void Solution::checkTargetPath(int gid, path p)
 		targets.emplace_back(line + 1);
 	}
 
-	sort(vnodes.begin(), vnodes.end());
-	sort(targets.begin(), targets.end());
+	std::sort(vnodes.begin(), vnodes.end());
+	std::sort(targets.begin(), targets.end());
 	// get the complement of openDepots
 	it = set_difference(targets.begin(), targets.end(),
 						vnodes.begin(), vnodes.end(), diff.begin());
@@ -3311,12 +3340,12 @@ void Solution::checkTargetPath(int gid, path p)
 
 	if (!diff.empty())
 	{
-		cout << "índices perdidos: ";
+		std::cout << "índices perdidos: ";
 		for (int i : diff)
 		{
-			cout << " " << i;
+			std::cout << " " << i;
 		}
-		cout << "\n";
+		std::cout << "\n";
 	}
 }
 
@@ -3377,7 +3406,7 @@ bool Solution::robotCapacity_val(path p)
 			{
 				const double tolerance = 1;
 
-				if (fabs(fuel_on_robot - it->second) > tolerance)
+				if (std::fabs(fuel_on_robot - it->second) > tolerance)
 					return false; // fuel at target does not match
 			}
 		}
@@ -3400,7 +3429,7 @@ bool Solution::robotCapacity_val(path p)
 Solution::path Solution::RobotCostInPath(path p)
 {
 	double fuel_required, robot_capacity, pcost, fuel_on_robot;
-	double max_fuel_required = numeric_limits<double>::min();
+	double max_fuel_required = std::numeric_limits<double>::min();
 
 	// obtém a base do robô
 	int baseID = input.getRobotBaseId(p.robotID);
@@ -3454,7 +3483,7 @@ Solution::path Solution::RobotCostInPath(path p)
 	p.pCost = pcost;
 
 	if (!PathRestrictions(p))
-		cout << "solução não validada:Best Path" << endl;
+		std::cout << "solução não validada:Best Path" << std::endl;
 
 	return p;
 }
@@ -3464,7 +3493,7 @@ Solution::path Solution::RobotCostInPath(path p)
 bool Solution::checkRCFromNodeToNextDepot(path p, int node)
 {
 	bool node_found = false;
-	vector<edge> sub_path;
+	std::vector<edge> sub_path;
 	double fuel_required_on_path, fuel_remaining = 0;
 	double fuel_on_node = 0;
 	int baseID = input.getRobotBaseId(p.robotID);
@@ -3500,7 +3529,7 @@ bool Solution::checkRCFromNodeToNextDepot(path p, int node)
 // verificar a restrição da solução
 bool Solution::checkRestrictions(solution s)
 {
-	map<int, pair<int, int>> mapInOut;
+	std::map<int, std::pair<int, int>> mapInOut;
 	double pathCost = 0;
 	double maxCost = 0;
 
@@ -3509,21 +3538,21 @@ bool Solution::checkRestrictions(solution s)
 		mapInOut.clear();
 		// vector<pair<pair<int,int>,pair<double,double>>> tempNodes = p.nodes;
 
-		vector<edge> edge_temp = p.edges;
+		std::vector<edge> edge_temp = p.edges;
 		auto it_edges = edge_temp.begin();
 
 		// auto itTemp = tempNodes.begin();
 		auto itMap = mapInOut.end();
 		pathCost = 0;
-		maxCost = numeric_limits<double>::lowest();
+		maxCost = std::numeric_limits<double>::lowest();
 		// get map of all nodes that enter and departure from a node;
 		while (it_edges != edge_temp.end())
 		{
 			// obter a quantidade de saída e entrada de cada vértice
-			itMap = mapInOut.emplace_hint(itMap, it_edges->node_a, make_pair(0, 0));
+			itMap = mapInOut.emplace_hint(itMap, it_edges->node_a, std::make_pair(0, 0));
 			itMap->second.first++;
 
-			itMap = mapInOut.emplace_hint(itMap, it_edges->node_b, make_pair(0, 0));
+			itMap = mapInOut.emplace_hint(itMap, it_edges->node_b, std::make_pair(0, 0));
 			itMap->second.second++;
 
 			// obter a soma de cada aresta
@@ -3539,19 +3568,19 @@ bool Solution::checkRestrictions(solution s)
 		// check if all targets ids are on solution
 		if (!hasAllTargets(s))
 		{
-			cout << "missing targets";
+			std::cout << "missing targets";
 			return false;
 		}
 		// check robot capacity restriction is satisfied for path.
 		if (!robotCapacity_val(p))
 		{
-			cout << "Robot Capacity problem\n";
+			std::cout << "Robot Capacity problem\n";
 			return false;
 		}
 		// check path cost
 		if (abs(pathCost - p.pCost) > 0.1)
 		{
-			cout << "Path cost problem";
+			std::cout << "Path cost problem";
 			return false;
 		}
 		// check if targets nodes has only one input and one output
@@ -3562,7 +3591,7 @@ bool Solution::checkRestrictions(solution s)
 			{
 				if (elem->second.first > 1 || elem->second.second > 1)
 				{
-					cout << "Problema de visita única";
+					std::cout << "Problema de visita única";
 					return false;
 				}
 			}
@@ -3572,7 +3601,7 @@ bool Solution::checkRestrictions(solution s)
 		{
 			if (map.second.first != map.second.second)
 			{
-				cout << "Não forma um circuito euleriano";
+				std::cout << "Não forma um circuito euleriano";
 				return false;
 			}
 		}
@@ -3659,15 +3688,15 @@ bool Solution::checkRestrictions(solution s)
 
 bool Solution::PathRestrictions(path p)
 {
-	map<int, pair<int, int>> mapInOut;
+	std::map<int, std::pair<int, int>> mapInOut;
 	double pathCost = 0;
 	double maxCost = 0;
 
 	mapInOut.clear();
-	vector<edge> edge_temp = p.edges;
+	std::vector<edge> edge_temp = p.edges;
 	auto it_edges = edge_temp.begin();
 	pathCost = 0;
-	maxCost = numeric_limits<double>::lowest();
+	maxCost = std::numeric_limits<double>::lowest();
 
 	// 1. Contabiliza entradas e saídas de cada nó e soma o custo
 	while (it_edges != edge_temp.end())
@@ -3724,10 +3753,10 @@ bool Solution::PathRestrictions(path p)
 	return true;
 }
 
-vector<bool> Solution::paretoSetValidation()
+std::vector<bool> Solution::paretoSetValidation()
 {
-	vector<bool> val;
-	for (pair<bool, solution> s : paretoSet)
+	std::vector<bool> val;
+	for (std::pair<bool, solution> s : paretoSet)
 	{
 		val.push_back(checkRestrictions(s.second));
 	}
@@ -4052,8 +4081,8 @@ bool Solution::IsCircuit(path p)
 
 Solution::path Solution::new_insert(path p, int out, int new_cl)
 {
-	list<edge> edges_list;
-	set<int> depots;
+	std::list<edge> edges_list;
+	std::set<int> depots;
 	path path_temp;
 
 	// injeção de erro para teste
@@ -4248,7 +4277,7 @@ Solution::path Solution::new_insert(path p, int out, int new_cl)
 	//---------------------------------------------------teste temporário da saída-----------------------
 	if (!PathRestrictions(p))
 	{
-		cout << "restrição não respeitada: new_insert" << endl;
+		std::cout << "restrição não respeitada: new_insert" << std::endl;
 		p.pCost = -1;
 	}
 	//-----------------------------------------------------------------------------------------
@@ -4261,7 +4290,7 @@ Solution::path Solution::Link_Sets_Node_out_in(path p, int out, int in)
 	double fuel_remaining = 0;
 	double fuel_required = 0;
 	double fuel_on_arrival;
-	pair<int, int> dir_out;
+	std::pair<int, int> dir_out;
 
 	edge edge_temp;
 
@@ -4270,12 +4299,11 @@ Solution::path Solution::Link_Sets_Node_out_in(path p, int out, int in)
 	path p_segment;
 
 	// lista de aresta para ir do nó out até o próximo depot apos o nó in
-	list<edge> edge_list;
+	std::list<edge> edge_list;
 
 	// lista d controle
 	// contém as arestas que deverão constar em edge_list e o custo e combustível para percorrê-las deverão ser calculados
-	list<edge> new_edges;
-
+	std::list<edge> new_edges;
 	path_temp.robotID = p.robotID;
 	path_temp.pID = p.pID;
 	path_temp.edges.clear();
@@ -4600,7 +4628,7 @@ Solution::path Solution::Link_Sets_Node_out_in(path p, int out, int in)
 	p.targetsNum = p.fuelOnTarget.size();
 
 	if (!PathRestrictions(p))
-		cout << "solução não validada:Best Path" << endl;
+		std::cout << "solução não validada:Best Path" << std::endl;
 
 	return p;
 }
@@ -4967,15 +4995,15 @@ Solution::path Solution::link_out_cl_in(path p, int out, int new_cl)
 	int new_cl_n1; // nó de entra da cl
 	int new_cl_n2; // nó de saída
 	edge next_cl;
-	pair<int, int> dir_out;
+	std::pair<int, int> dir_out;
 
 	edge edge_temp;
 	path path_temp = p;
 	path p_segment;
 
-	vector<edge> edge_vec;
-	list<edge> edge_list;
-	list<edge> new_edges;
+	std::vector<edge> edge_vec;
+	std::list<edge> edge_list;
+	std::list<edge> new_edges;
 
 	path_temp.edges.clear();
 	path_temp.pCost = 0;
@@ -4983,7 +5011,7 @@ Solution::path Solution::link_out_cl_in(path p, int out, int new_cl)
 
 	// verifica se já existe erro em fuelOnTarget do caminho p
 	if (!robotCapacity_val(p))
-		cout << "Robot Capacity problem\n";
+		std::cout << "Robot Capacity problem\n";
 
 	// obter a direção da linha de cobertura de saída
 	dir_out = getCLDirection(p, out);
@@ -5217,7 +5245,7 @@ Solution::path Solution::link_out_cl_in(path p, int out, int new_cl)
 
 	//---------------------------------------------------teste temporário da saída-----------------------
 	if (!robotCapacity_val(path_temp))
-		cout << "Robot Capacity problem\n";
+		std::cout << "Robot Capacity problem\n";
 
 	return path_temp;
 }
@@ -5395,7 +5423,7 @@ Solution::path Solution::GetPathFromEdgeToNextDepot(path p, edge edge_cl)
 	path path_temp;
 
 	bool found_node = false;
-	vector<edge> edges_vec;
+	std::vector<edge> edges_vec;
 
 	for (auto edge : p.edges)
 	{
@@ -5417,10 +5445,10 @@ Solution::path Solution::GetPathFromEdgeToNextDepot(path p, edge edge_cl)
 	return path_temp;
 }
 
-vector<pair<int, int>> Solution::GetEdgesFromPreviousCLToCL(path p, int cl)
+std::vector<std::pair<int, int>> Solution::GetEdgesFromPreviousCLToCL(path p, int cl)
 {
-	vector<pair<int, int>> rlinks_vec;
-	vector<pair<int, int>> links_vec;
+	std::vector<std::pair<int, int>> rlinks_vec;
+	std::vector<std::pair<int, int>> links_vec;
 
 	// posto associado na entrada
 	path path_temp = GetPathFromBaseToNewCL(p, cl);
@@ -5437,7 +5465,7 @@ vector<pair<int, int>> Solution::GetEdgesFromPreviousCLToCL(path p, int cl)
 			break;
 
 		// inserir as linhas de ligações entre as cls
-		rlinks_vec.emplace_back(make_pair(rit->node_a, rit->node_b));
+		rlinks_vec.emplace_back(std::make_pair(rit->node_a, rit->node_b));
 
 		rit++;
 	}
@@ -5448,10 +5476,10 @@ vector<pair<int, int>> Solution::GetEdgesFromPreviousCLToCL(path p, int cl)
 	return links_vec;
 }
 
-vector<pair<int, int>> Solution::GetEdgesFromCLToPosteriorCL(path p, int cl)
+std::vector<std::pair<int, int>> Solution::GetEdgesFromCLToPosteriorCL(path p, int cl)
 {
-	vector<pair<int, int>> rlinks_vec;
-	vector<pair<int, int>> links_vec;
+	std::vector<std::pair<int, int>> rlinks_vec;
+	std::vector<std::pair<int, int>> links_vec;
 
 	// posto associado na entrada
 	path path_temp = GetPathFromNewCLToBase(p, cl);
@@ -5468,7 +5496,7 @@ vector<pair<int, int>> Solution::GetEdgesFromCLToPosteriorCL(path p, int cl)
 			break;
 
 		// inserir as linhas de ligações entre as cls
-		links_vec.emplace_back(make_pair(it->node_a, it->node_b));
+		links_vec.emplace_back(std::make_pair(it->node_a, it->node_b));
 
 		it++;
 	}
@@ -5476,22 +5504,22 @@ vector<pair<int, int>> Solution::GetEdgesFromCLToPosteriorCL(path p, int cl)
 	return links_vec;
 }
 
-pair<Solution::path, string> Solution::bestInsertionCL(path p, int cl)
+std::pair<Solution::path, std::string> Solution::bestInsertionCL(path p, int cl)
 {
 	// obter as linhas de cobertura de p
 	// int nCL = getNumberOfLines(p.pID);
 
-	vector<int> cvlID = getOddCVLIndexes(p);
+	std::vector<int> cvlID = getOddCVLIndexes(p);
 	int nCL = cvlID.size();
 
 	int pos = 0;
 	path new_path, pathTemp, minPath;
-	double minPCost = numeric_limits<double>::max();
+	double minPCost = std::numeric_limits<double>::max();
 
-	map<int, pair<int, int>> mapcl;
-	pair<int, int> dir;
+	std::map<int, std::pair<int, int>> mapcl;
+	std::pair<int, int> dir;
 
-	pair<path, string> path_op;
+	std::pair<path, std::string> path_op;
 
 	for (int i = 0; i < nCL; i++)
 	{
@@ -5512,7 +5540,7 @@ pair<Solution::path, string> Solution::bestInsertionCL(path p, int cl)
 		// teste para debug
 		if (!PathRestrictions(new_path))
 		{
-			cout << "solução NÃO validada best\n";
+			std::cout << "solução NÃO validada best\n";
 		}
 
 		path_op = EvalOthersOrientationsOnPath(new_path, cl);
@@ -5522,7 +5550,7 @@ pair<Solution::path, string> Solution::bestInsertionCL(path p, int cl)
 		// teste para debug
 		if (!PathRestrictions(pathTemp))
 		{
-			cout << "solução NÃO validada best\n";
+			std::cout << "solução NÃO validada best\n";
 		}
 
 		// se o caminho for inviável tentar próxima inserção
@@ -5551,15 +5579,15 @@ pair<Solution::path, string> Solution::bestInsertionCL(path p, int cl)
 	return path_op;
 }
 
-pair<Solution::path, string> Solution::EvalOthersOrientationsOnPath(path p_a_b, int cl)
+std::pair<Solution::path, std::string> Solution::EvalOthersOrientationsOnPath(path p_a_b, int cl)
 {
-	pair<int, int> dir;
+	std::pair<int, int> dir;
 	path least_cost_path;
 
 	path p_ia_ib, p_a_ib, p_ia_b;
 	path p_a, p_b, p_ib, p_ia;
 
-	pair<path, string> path_op;
+	std::pair<path, std::string> path_op;
 
 	// get first segment from base to new cl called p_a
 	p_a = GetPathFromBaseToNewCL(p_a_b, cl);
@@ -5592,17 +5620,17 @@ pair<Solution::path, string> Solution::EvalOthersOrientationsOnPath(path p_a_b, 
 	//-----------------------------------------------------------------------------------
 	// manutenção para testes...verificar se o caminho gerado é circuito e se a capacidade do robô é respeitada
 	if (!PathRestrictions(least_cost_path))
-		cout << "solução NÃO validada eval" << endl;
+		std::cout << "solução NÃO validada eval" << std::endl;
 	//-------------------------------------------------------------------------------------------------------
 
 	return path_op;
 }
 
-pair<Solution::path, string> Solution::GetLeastCostPath(path p_a_b, path p_a_ib, path p_ia_ib, path p_ia_b)
+std::pair<Solution::path, std::string> Solution::GetLeastCostPath(path p_a_b, path p_a_ib, path p_ia_ib, path p_ia_b)
 {
 
 	path path_temp;
-	pair<path, string> path_op;
+	std::pair<path, std::string> path_op;
 
 	// caso todos os caminhos sejam inviáveis atribuir -1 ao custo
 	path_temp.pCost = -1;
@@ -5612,25 +5640,25 @@ pair<Solution::path, string> Solution::GetLeastCostPath(path p_a_b, path p_a_ib,
 		(p_a_b.pCost < p_ia_b.pCost || p_ia_b.pCost < 0) &&
 		p_a_b.pCost > 0)
 	{
-		return make_pair(p_a_b, "p_a_b");
+		return std::make_pair(p_a_b, "p_a_b");
 	}
 	else if ((p_a_ib.pCost < p_ia_ib.pCost || p_ia_ib.pCost < 0) &&
 			 (p_a_ib.pCost < p_ia_b.pCost || p_ia_b.pCost < 0) &&
 			 p_a_ib.pCost > 0)
 	{
-		return make_pair(p_a_ib, "p_a_ib");
+		return std::make_pair(p_a_ib, "p_a_ib");
 	}
 	else if ((p_ia_ib.pCost < p_ia_b.pCost || p_ia_b.pCost < 0) &&
 			 p_ia_ib.pCost > 0)
 	{
-		return make_pair(p_ia_ib, "p_ia_ib");
+		return std::make_pair(p_ia_ib, "p_ia_ib");
 	}
 	else if (p_ia_b.pCost > 0)
 	{
-		return make_pair(p_ia_b, "p_ia_b");
+		return std::make_pair(p_ia_b, "p_ia_b");
 	}
 
-	return make_pair(path_temp, "none");
+	return std::make_pair(path_temp, "none");
 }
 
 Solution::path Solution::PathUnion(path path_a, path path_b)
@@ -5664,16 +5692,13 @@ Solution::path Solution::PathUnion(path path_a, path path_b)
 	p_union.depotsNum = p_union.depots.size() + 1;
 	p_union.targetsNum = p_union.fuelOnTarget.size();
 
-	for (int id : p_union.depots)
-		if (id < 31)
-			cerr << "Problem id PathUnion!\n";
 
 	return p_union;
 }
 
-vector<pair<int, int>> Solution::GetALLCLsFromNewCLToBase(path p, int node)
+std::vector<std::pair<int, int>> Solution::GetALLCLsFromNewCLToBase(path p, int node)
 {
-	vector<pair<int, int>> cls_vec;
+	std::vector<std::pair<int, int>> cls_vec;
 
 	bool node_found = false;
 
@@ -5687,27 +5712,27 @@ vector<pair<int, int>> Solution::GetALLCLsFromNewCLToBase(path p, int node)
 		// inserit todos as arestas que são CL no vetor
 		if (node_found)
 			if (IsCLine(it_edges->node_a, it_edges->node_b))
-				cls_vec.emplace_back(make_pair(it_edges->node_a, it_edges->node_b));
+				cls_vec.emplace_back(std::make_pair(it_edges->node_a, it_edges->node_b));
 	}
 
 	return cls_vec;
 }
 
-pair<int, int> Solution::getCLDirection(path p, int cl)
+std::pair<int, int> Solution::getCLDirection(path p, int cl)
 {
 	auto it_edges = p.edges.begin();
-	pair<int, int> cl_nodes;
+	std::pair<int, int> cl_nodes;
 
 	while (it_edges != p.edges.end())
 	{
 		if (it_edges->node_a == cl && it_edges->node_b == cl + 1)
 		{
-			cl_nodes = make_pair(it_edges->node_a, it_edges->node_b);
+			cl_nodes = std::make_pair(it_edges->node_a, it_edges->node_b);
 			break;
 		}
 		else if (it_edges->node_a == cl + 1 && it_edges->node_b == cl)
 		{
-			cl_nodes = make_pair(it_edges->node_a, it_edges->node_b);
+			cl_nodes = std::make_pair(it_edges->node_a, it_edges->node_b);
 			break;
 		}
 		++it_edges;
@@ -5715,9 +5740,9 @@ pair<int, int> Solution::getCLDirection(path p, int cl)
 	return cl_nodes;
 }
 
-vector<pair<int, int>> Solution::GetInvCLs(vector<pair<int, int>> cls_vec)
+std::vector<std::pair<int, int>> Solution::GetInvCLs(std::vector<std::pair<int, int>> cls_vec)
 {
-	vector<pair<int, int>> path;
+	std::vector<std::pair<int, int>> path;
 	auto itMap = cls_vec.begin();
 	int node_first, node_second;
 
@@ -5731,19 +5756,19 @@ vector<pair<int, int>> Solution::GetInvCLs(vector<pair<int, int>> cls_vec)
 		if (!path.empty())
 			path.emplace_back(path.back().second, node_second);
 
-		path.emplace_back(make_pair(node_second, node_first));
+		path.emplace_back(std::make_pair(node_second, node_first));
 		itMap++;
 	}
 	return path;
 }
 
 // calcula o combustível e o custo para percorrer cada aresta do caminho.
-vector<Solution::edge> Solution::GetEdgesCosts(vector<pair<int, int>> path, int robotID)
+std::vector<Solution::edge> Solution::GetEdgesCosts(std::vector<std::pair<int, int>> path, int robotID)
 {
-	vector<edge> edges_costs;
+	std::vector<edge> edges_costs;
 	double fuel, cost;
 	edge edge_temp;
-	for (pair<int, int> e : path)
+	for (std::pair<int, int> e : path)
 	{
 		// adiciona combustível para ir do nó A ao B
 		fuel = getCostOnGraph(robotID, e.first, e.second);
@@ -5761,7 +5786,7 @@ vector<Solution::edge> Solution::GetEdgesCosts(vector<pair<int, int>> path, int 
 
 // recebe um vetor com um possível caminho e um nó de partida, realiza os ajustes de reabastecimento se possível e retorna
 // o caminho ajustado.
-Solution::path Solution::AdjustRefuelingFromNode(vector<edge> path_costs, path p, int cl_node)
+Solution::path Solution::AdjustRefuelingFromNode(std::vector<edge> path_costs, path p, int cl_node)
 {
 
 	edge link_cl_node_to_path;
@@ -5774,12 +5799,11 @@ Solution::path Solution::AdjustRefuelingFromNode(vector<edge> path_costs, path p
 	path p_segment;
 
 	// utilizar a lista para inserir novas arestas no caminho. O uso de vetor traz problemas na realocação;
-	list<edge> edge_list;
+	std::list<edge> edge_list;
 	edge_list.insert(edge_list.begin(), path_costs.begin(), path_costs.end());
 
 	// vetor para retornar o resultado.
-	vector<pair<pair<int, int>, pair<double, double>>> walkVector;
-
+	std::vector<std::pair<std::pair<int, int>, std::pair<double, double>>> walkVector;
 	// obter o combustível restante nó de saída da linha de cobertura inserida.
 	auto itFuel = path_temp.fuelOnTarget.find(cl_node);
 	if (itFuel != path_temp.fuelOnTarget.end())
@@ -5958,7 +5982,7 @@ Solution::path Solution::AdjustRefuelingFromNode(vector<edge> path_costs, path p
 
 	// debug: teste para verificar se o caminho é válido
 	if (!PathRestrictions(path_temp))
-		cout << "solução não validada " << endl;
+		std::cout << "solução não validada " << std::endl;
 
 	return path_temp;
 }
@@ -5966,7 +5990,7 @@ Solution::path Solution::AdjustRefuelingFromNode(vector<edge> path_costs, path p
 Solution::path Solution::GetPathFromBaseToNewCL(path p, int cl)
 {
 	path path_temp;
-	pair<int, int> dir;
+	std::pair<int, int> dir;
 
 	dir = getCLDirection(p, cl);
 	int node_a = input.getRobotBaseId(p.robotID);
@@ -5979,7 +6003,7 @@ Solution::path Solution::GetPathFromBaseToNewCL(path p, int cl)
 
 // recebe um circuito e realiza os ajustes de reabastecimento se possível
 // retorna a o circuito ajustado
-Solution::path Solution::AdjustPathRefueling(vector<edge> path_costs, path p)
+Solution::path Solution::AdjustPathRefueling(std::vector<edge> path_costs, path p)
 {
 	path path_t = p;
 	path p_segment;
@@ -5993,7 +6017,7 @@ Solution::path Solution::AdjustPathRefueling(vector<edge> path_costs, path p)
 	int baseID = input.getRobotBaseId(p.robotID);
 
 	// utilizar a lista para inserir novas arestas no caminho. O uso de vetor traz problemas na realocação;
-	list<edge> edge_list;
+	std::list<edge> edge_list;
 
 	if (path_costs.empty())
 	{
@@ -6003,7 +6027,7 @@ Solution::path Solution::AdjustPathRefueling(vector<edge> path_costs, path p)
 	// debug: verificação se existe erro no caminho antes de prosseguir
 	if (!robotCapacity_val(path_t))
 	{
-		cout << "capacidade violada adjsPath" << endl;
+		std::cout << "capacidade violada adjsPath" << std::endl;
 	}
 
 	edge_list.insert(edge_list.begin(), path_costs.begin(), path_costs.end());
@@ -6204,17 +6228,17 @@ Solution::path Solution::AdjustPathRefueling(vector<edge> path_costs, path p)
 	//-------------------------------teste temporário da saída---------------------------------------------
 	if (!robotCapacity_val(path_t))
 	{
-		cout << "capacidade violada adjsPath" << endl;
+		std::cout << "capacidade violada adjsPath" << std::endl;
 	}
 	//---------------------------------------------------------------------------
 	return path_t;
 }
 
 // retorna todas a CL da base até a CL anterior à nova Cl.
-vector<pair<int, int>> Solution::GetALLCLsFromBaseToNewCL(path p, int node)
+std::vector<std::pair<int, int>> Solution::GetALLCLsFromBaseToNewCL(path p, int node)
 {
 	int base, newcl;
-	vector<pair<int, int>> cls_vec;
+	std::vector<std::pair<int, int>> cls_vec;
 
 	base = input.getRobotBaseId(p.robotID);
 	newcl = node;
@@ -6232,16 +6256,16 @@ vector<pair<int, int>> Solution::GetALLCLsFromBaseToNewCL(path p, int node)
 		// não inclui a newcl no vetor
 		if (found_node_base && !found_new_cl)
 			if (IsCLine(edge.node_a, edge.node_b))
-				cls_vec.emplace_back(make_pair(edge.node_a, edge.node_b));
+				cls_vec.emplace_back(std::make_pair(edge.node_a, edge.node_b));
 	}
 
 	return cls_vec;
 }
 
-vector<pair<int, int>> Solution::GetALLCLsFromBase(path p)
+std::vector<std::pair<int, int>> Solution::GetALLCLsFromBase(path p)
 {
 	int base = input.getRobotBaseId(p.robotID);
-	vector<pair<int, int>> cls_vec;
+	std::vector<std::pair<int, int>> cls_vec;
 	bool found_node_base = false;
 
 	for (auto edge : p.edges)
@@ -6252,7 +6276,7 @@ vector<pair<int, int>> Solution::GetALLCLsFromBase(path p)
 		// não inclui a newcl no vetor
 		if (found_node_base)
 			if (IsCLine(edge.node_a, edge.node_b))
-				cls_vec.emplace_back(make_pair(edge.node_a, edge.node_b));
+				cls_vec.emplace_back(std::make_pair(edge.node_a, edge.node_b));
 	}
 
 	return cls_vec;
@@ -6260,7 +6284,7 @@ vector<pair<int, int>> Solution::GetALLCLsFromBase(path p)
 
 Solution::path Solution::GetPathFromNewCLToBase(path p, int cl)
 {
-	pair<int, int> dir;
+	std::pair<int, int> dir;
 	dir = getCLDirection(p, cl);
 	int node_a = dir.second;
 	int node_b = input.getRobotBaseId(p.robotID);
@@ -6272,15 +6296,14 @@ Solution::path Solution::GetPathFromNewCLToBase(path p, int cl)
 
 Solution::path Solution::GetInvPathFromNewCLToBase(path p, int cl)
 {
-	pair<int, int> dir;
-	pair<int, int> next_cl;
-	vector<pair<int, int>> cls_vec;
-	vector<pair<int, int>> inv_path;
-	vector<edge> edges_costs;
+	std::pair<int, int> dir;
+	std::pair<int, int> next_cl;
+	std::vector<std::pair<int, int>> cls_vec;
+	std::vector<std::pair<int, int>> inv_path;
+	std::vector<edge> edges_costs;
 	path path_temp;
 
-	map<int, pair<int, int>> mapcls;
-
+	std::map<int, std::pair<int, int>> mapcls;
 	// obter a direção da linha de cobertura
 	dir = getCLDirection(p, cl);
 
@@ -6316,9 +6339,9 @@ Solution::path Solution::GetInvPathFromNewCLToBase(path p, int cl)
 
 Solution::path Solution::GetInvPath(path p)
 {
-	vector<pair<int, int>> cls_vec;
-	vector<pair<int, int>> inv_path;
-	vector<edge> path_costs;
+	std::vector<std::pair<int, int>> cls_vec;
+	std::vector<std::pair<int, int>> inv_path;
+	std::vector<edge> path_costs;
 	path path_temp;
 
 	// obter as linhas de coberturas a partir de cl.
@@ -6356,7 +6379,7 @@ Solution::path Solution::GetPathFromNodeAToNodeB(path p, int node_a, int node_b)
 	auto it_fuel = p.fuelOnTarget.begin();
 
 	bool found_node_a = false;
-	edge edge_temp;
+	Solution::edge edge_temp;
 
 	for (edge e : p.edges)
 	{
@@ -6388,8 +6411,6 @@ Solution::path Solution::GetPathFromNodeAToNodeB(path p, int node_a, int node_b)
 				int depot_id = input.getDepotIdOnTarget(e.node_a);
 
 				path_temp.depots.emplace(e.node_a);
-				if (e.node_a < 31)
-					cerr << "Problem id GetPathFromNodeAtoNodeB!\n";
 			}
 		}
 	}
@@ -6431,25 +6452,25 @@ Solution::edge Solution::GetNextCL(path p, int node)
 void Solution::Iteractive_DFS(path p)
 {
 	int prox = 0;
-	map<int, pair<pair<vector<pair<int, double>>, int>, int>> ladj;
-	vector<pair<pair<int, int>, pair<double, double>>> walk;
-	pair<int, int> edge;
+	std::map<int, std::pair<std::pair<std::vector<std::pair<int, double>>, int>, int>> ladj;
+	std::vector<std::pair<std::pair<int, int>, std::pair<double, double>>> walk;
+	std::pair<int, int> edge;
 	int node_a = input.getRobotBaseId(p.robotID);
 
-	vector<pair<pair<int, int>, pair<double, double>>> tempNodes = p.nodes;
+	std::vector<std::pair<std::pair<int, int>, std::pair<double, double>>> tempNodes = p.nodes;
 	auto itTemp = tempNodes.begin();
 	auto itLAdj = ladj.end();
 	// transforma pnodes em lista de adjacência
 	while (itTemp != tempNodes.end())
 	{
-		itLAdj = ladj.emplace_hint(itLAdj, itTemp->first.first, make_pair(make_pair(vector<pair<int, double>>(), 0), 1));
-		itLAdj->second.first.first.push_back(make_pair(itTemp->first.second, itTemp->second.second));
+		itLAdj = ladj.emplace_hint(itLAdj, itTemp->first.first, std::make_pair(std::make_pair(std::vector<std::pair<int, double>>(), 0), 1));
+		itLAdj->second.first.first.push_back(std::make_pair(itTemp->first.second, itTemp->second.second));
 		++itTemp;
 	}
 	// Aplicar a busca em profundidade para verificar o custo do maior caminho entre depots.
 
 	ladj.find(node_a)->second.second = 2;
-	stack<int> stack;
+	std::stack<int> stack;
 	// inicializa com a base
 	stack.push(node_a);
 	itLAdj = ladj.begin();
@@ -6899,8 +6920,8 @@ void Solution::Iteractive_DFS(path p)
  */
 void Solution::SortMultiplesAdjacentOnDepots(path *p)
 {
-	using AdjTuple = tuple<list<pair<int, int>>, int, int>; // <adjacentes, visitado, proximo_adj_index>
-	map<int, AdjTuple> map_adj;
+	using AdjTuple = std::tuple<std::list<std::pair<int, int>>, int, int>; // <adjacentes, visitado, proximo_adj_index>
+	std::map<int, AdjTuple> map_adj;
 
 	// Obtém o identificador da base do robô para iniciar a DFS
 	const int baseID = input.getRobotBaseId(p->robotID);
@@ -6910,21 +6931,20 @@ void Solution::SortMultiplesAdjacentOnDepots(path *p)
 	// Constrói o grafo auxiliar de adjacência (map_adj) a partir das arestas originais
 	for (const auto &edge : p->edges)
 	{
-		auto &adj_list = get<0>(map_adj[edge.node_a]);
+		auto &adj_list = std::get<0>(map_adj[edge.node_a]);
 		int pos = adj_list.empty() ? 0 : adj_list.back().second + 1;
 		adj_list.emplace_back(edge.node_b, pos);
-		get<1>(map_adj[edge.node_a]) = 1; // Visitado = 1
-		get<2>(map_adj[edge.node_a]) = 0; // Prox adj = 0
+		std::get<1>(map_adj[edge.node_a]) = 1; // Visitado = 1
+		std::get<2>(map_adj[edge.node_a]) = 0; // Prox adj = 0
 	}
 
 	// Inicializa as estruturas de controle para a DFS, incluindo pilha e marcação de visitados
-	stack<int> stack_dfs;
-	stack<int> branches_opened;
+	std::stack<int> stack_dfs;
+	std::stack<int> branches_opened;
 	stack_dfs.push(u);
 	branches_opened.push(u);
-	get<1>(map_adj[u]) = 2;
-
-	map<int, pair<int, list<pair<int, list<int>>>>> branches_list;
+	std::get<1>(map_adj[u]) = 2;
+	std::map<int, std::pair<int, std::list<std::pair<int, std::list<int>>>>> branches_list;
 	auto it_branches_list = branches_list.begin();
 	auto exit_branch = branches_list.begin();
 
@@ -6933,9 +6953,9 @@ void Solution::SortMultiplesAdjacentOnDepots(path *p)
 	{
 		u = stack_dfs.top();
 		auto &tupla = map_adj[u];
-		auto &adj_list = get<0>(tupla);
-		auto &visitado = get<1>(tupla);
-		auto &prox = get<2>(tupla);
+		auto &adj_list = std::get<0>(tupla);
+		auto &visitado = std::get<1>(tupla);
+		auto &prox = std::get<2>(tupla);
 
 		if (prox < (int)adj_list.size())
 		{
@@ -6951,7 +6971,7 @@ void Solution::SortMultiplesAdjacentOnDepots(path *p)
 					branches_opened.push(u);
 
 				int pos = adj->second;
-				it_branches_list = branches_list.emplace_hint(it_branches_list, u, make_pair(0, list<pair<int, list<int>>>()));
+				it_branches_list = branches_list.emplace_hint(it_branches_list, u, std::make_pair(0, std::list<std::pair<int, std::list<int>>>()));
 				it_branches_list->second.first = pos;
 			}
 
@@ -6960,7 +6980,7 @@ void Solution::SortMultiplesAdjacentOnDepots(path *p)
 				branch_id = it_branches_list->second.first;
 				auto &branch_list = it_branches_list->second.second;
 				if ((int)branch_list.size() == branch_id)
-					branch_list.emplace_back(pair<int, list<int>>());
+					branch_list.emplace_back(std::make_pair(0, std::list<int>()));
 
 				auto branch_it = next(branch_list.begin(), branch_id);
 
@@ -6978,9 +6998,9 @@ void Solution::SortMultiplesAdjacentOnDepots(path *p)
 				branch_it->first = branch_list.size();
 			}
 
-			if (map_adj.count(v) && get<1>(map_adj[v]) == 1)
+			if (map_adj.count(v) && std::get<1>(map_adj[v]) == 1)
 			{
-				get<1>(map_adj[v]) = 2;
+				std::get<1>(map_adj[v]) = 2;
 				stack_dfs.push(v);
 			}
 		}
@@ -6993,11 +7013,11 @@ void Solution::SortMultiplesAdjacentOnDepots(path *p)
 
 	// Ordena os branches com base na proximidade lógica em relação à base (simulando distância)
 	int order = branches_list.size();
-	map<int, int> branch_order;
+	std::map<int, int> branch_order;
 	branch_order[baseID] = order--;
 	branch_order[exit_branch->first] = order--;
 
-	list<int> branches_with_node;
+	std::list<int> branches_with_node;
 	it_branches_list = branches_list.begin();
 
 	while (branch_order.size() < branches_list.size())
@@ -7035,14 +7055,14 @@ void Solution::SortMultiplesAdjacentOnDepots(path *p)
 	// Ordenar cada lista de branches
 	for (auto &bl : branches_list)
 	{
-		vector<pair<int, list<int>>> temp(bl.second.second.begin(), bl.second.second.end());
-		sort(temp.begin(), temp.end(), [](auto &a, auto &b)
+		std::vector<std::pair<int, std::list<int>>> temp(bl.second.second.begin(), bl.second.second.end());
+		std::sort(temp.begin(), temp.end(), [](auto &a, auto &b)
 			 { return a.first < b.first; });
 		bl.second.second.assign(temp.begin(), temp.end());
 	}
 
 	// Constrói a sequência final de nós (union_branches) a partir dos branches ordenados
-	list<int> union_branches;
+	std::list<int> union_branches;
 	int root_node = baseID;
 
 	while (!branches_list.empty())
@@ -7058,7 +7078,7 @@ void Solution::SortMultiplesAdjacentOnDepots(path *p)
 		{
 			if (!it_list->second.empty() && it_list->second.back() == root_node)
 			{
-				union_branches.splice(union_branches.end(), list<int>(it_list->second.begin(), it_list->second.end()));
+				union_branches.splice(union_branches.end(), std::list<int>(it_list->second.begin(), it_list->second.end()));
 				it_list = blist.erase(it_list);
 			}
 			else
@@ -7080,10 +7100,10 @@ void Solution::SortMultiplesAdjacentOnDepots(path *p)
 	}
 
 	// Reconstrói a lista de arestas original (p->edges) a partir da sequência de nós ordenada
-	list<edge> original_edges(p->edges.begin(), p->edges.end());
+	std::list<edge> original_edges(p->edges.begin(), p->edges.end());
 	p->edges.clear();
 	edge edge_temp;
-	unordered_map<pair<int, int>, edge, pair_hash> original_edges_map;
+	std::unordered_map<std::pair<int, int>, edge, pair_hash> original_edges_map;
 
 	for (const auto &e : original_edges)
 	{
@@ -7115,16 +7135,15 @@ void Solution::SortMultiplesAdjacentOnDepots(path *p)
 		p->pCost = -1;
 }
 
-list<pair<pair<pair<int, int>, double>, vector<int>>> Solution::GetTargetsLinkingCLs(path p)
+std::list<std::pair<std::pair<std::pair<int, int>, double>, std::vector<int>>> Solution::GetTargetsLinkingCLs(path p)
 {
 
-	list<pair<pair<pair<int, int>, double>, vector<int>>> nodes_between_cl;
-	vector<int> depots_ids;
+	std::list<std::pair<std::pair<std::pair<int, int>, double>, std::vector<int>>> nodes_between_cl;
+	std::vector<int> depots_ids;
+	std::pair<std::pair<int, int>, double> t2t;
+	std::pair<std::pair<std::pair<int, int>, double>, std::vector<int>> t2t_depot;
 
-	pair<pair<int, int>, double> t2t;
-	pair<pair<pair<int, int>, double>, vector<int>> t2t_depot;
-
-	vector<edge>::iterator it_edges = p.edges.begin();
+	std::vector<edge>::iterator it_edges = p.edges.begin();
 	int base_id = input.getRobotBaseId(p.robotID);
 
 	// buscar o caminho entre linhas de cobertura
@@ -7177,10 +7196,10 @@ list<pair<pair<pair<int, int>, double>, vector<int>>> Solution::GetTargetsLinkin
 }
 
 // retornar os ids de todos os targets existentes entre node_a e node_b
-map<int, vector<pair<int, double>>> Solution::GetGraphOfDepotsBetween_T2T(int node_a, int node_b, int robot_id)
+std::map<int, std::vector<std::pair<int, double>>> Solution::GetGraphOfDepotsBetween_T2T(int node_a, int node_b, int robot_id)
 {
-	map<int, vector<pair<int, double>>> list_adj;
-	vector<int> depots = getDepotsBetweenNodes(node_a, node_b);
+	std::map<int, std::vector<std::pair<int, double>>> list_adj;
+	std::vector<int> depots = getDepotsBetweenNodes(node_a, node_b);
 	unsigned int nvertices = depots.size();
 	double flight_time = 0;
 
@@ -7188,7 +7207,7 @@ map<int, vector<pair<int, double>>> Solution::GetGraphOfDepotsBetween_T2T(int no
 
 	for (unsigned int i = 0; i < nvertices; i++)
 	{
-		it_list_adj = list_adj.emplace_hint(it_list_adj, depots[i], vector<pair<int, double>>());
+		it_list_adj = list_adj.emplace_hint(it_list_adj, depots[i], std::vector<std::pair<int, double>>());
 
 		for (unsigned int j = 0; j < nvertices; j++)
 		{
@@ -7196,7 +7215,7 @@ map<int, vector<pair<int, double>>> Solution::GetGraphOfDepotsBetween_T2T(int no
 			// caso o robô tenha capacidade de voar de i para j, adicione ao grafo dg
 			if (isDefinitelyLessThan(flight_time, input.getRobotFuel(robot_id)))
 			{
-				it_list_adj->second.emplace_back(make_pair(depots[j], flight_time));
+				it_list_adj->second.emplace_back(std::make_pair(depots[j], flight_time));
 			}
 		}
 	}
@@ -7204,9 +7223,9 @@ map<int, vector<pair<int, double>>> Solution::GetGraphOfDepotsBetween_T2T(int no
 	return list_adj;
 }
 
-map<int, vector<pair<int, double>>> Solution::AddTargetOnGraph(map<int, vector<pair<int, double>>> list_adj, int node_a, int node_b, int robot_id)
+std::map<int, std::vector<std::pair<int, double>>> Solution::AddTargetOnGraph(std::map<int, std::vector<std::pair<int, double>>> list_adj, int node_a, int node_b, int robot_id)
 {
-	map<int, vector<pair<int, double>>> list_adj_temp = list_adj;
+	std::map<int, std::vector<std::pair<int, double>>> list_adj_temp = list_adj;
 	int n1 = 0;
 	double time_2_a, time_2_b;
 
@@ -7215,8 +7234,8 @@ map<int, vector<pair<int, double>>> Solution::AddTargetOnGraph(map<int, vector<p
 
 	double robot_capacity = input.getRobotFuel(robot_id);
 
-	vector<pair<double, int>> dist_depots_2_node_a; // distância e depotID em relação ao node_a
-	vector<pair<double, int>> dist_depots_2_node_b; // distância e depotID em relação ao node_b
+	std::vector<std::pair<double, int>> dist_depots_2_node_a; // distância e depotID em relação ao node_a
+	std::vector<std::pair<double, int>> dist_depots_2_node_b; // distância e depotID em relação ao node_b
 
 	// obter a distância entre os node_a e node_b, e os depots da lista de adjacência
 	while (it_list_adj != list_adj.end())
@@ -7227,29 +7246,29 @@ map<int, vector<pair<int, double>>> Solution::AddTargetOnGraph(map<int, vector<p
 		time_2_a = getCostOnGraph(robot_id, n1, node_a);
 		if (time_2_a < robot_capacity)
 		{
-			dist_depots_2_node_a.emplace_back(make_pair(time_2_a, n1));
+			dist_depots_2_node_a.emplace_back(std::make_pair(time_2_a, n1));
 		}
 
 		// distância n1 em relaão ao node_b;
 		time_2_b = getCostOnGraph(robot_id, n1, node_b);
 		if (time_2_b < robot_capacity)
 		{
-			dist_depots_2_node_b.emplace_back(make_pair(time_2_b, n1));
+			dist_depots_2_node_b.emplace_back(std::make_pair(time_2_b, n1));
 		}
 
 		++it_list_adj;
 	}
 
-	sort(dist_depots_2_node_a.begin(), dist_depots_2_node_a.end());
-	sort(dist_depots_2_node_b.begin(), dist_depots_2_node_b.end());
+	std::sort(dist_depots_2_node_a.begin(), dist_depots_2_node_a.end());
+	std::sort(dist_depots_2_node_b.begin(), dist_depots_2_node_b.end());
 
 	// inserir na lista de adj ligação do node_a ao depot mais próximo e
 	int node1 = dist_depots_2_node_a.front().second;
 	double dist1 = dist_depots_2_node_a.front().first;
-	vector<pair<int, double>> vec1;
-	vec1.emplace_back(make_pair(node1, dist1));
+	std::vector<std::pair<int, double>> vec1;
+	vec1.emplace_back(std::make_pair(node1, dist1));
 	// insere o node_a como vizinho do node1
-	list_adj.find(node1)->second.emplace_back(make_pair(node_a, dist1));
+	list_adj.find(node1)->second.emplace_back(std::make_pair(node_a, dist1));
 
 	// insere o node_a como uma entrada na lista de adjacência
 	// como o viznho node1
@@ -7257,29 +7276,28 @@ map<int, vector<pair<int, double>>> Solution::AddTargetOnGraph(map<int, vector<p
 
 	// inserir na lista de adj ligação do node_b ao depot mais próximo.
 	int node2 = dist_depots_2_node_b.front().second;
-	int dist2 = dist_depots_2_node_b.front().first;
-	vector<pair<int, double>> vec2;
-	vec2.emplace_back(make_pair(node2, dist2));
+	double dist2 = dist_depots_2_node_b.front().first;
+	std::vector<std::pair<int, double>> vec2;
+	vec2.emplace_back(std::make_pair(node2, dist2));
 
 	// insere o node_b como uma entrada na lista de adjacência
 	// como o viznho node2
-	list_adj.find(node2)->second.emplace_back(make_pair(node_b, dist2));
+	list_adj.find(node2)->second.emplace_back(std::make_pair(node_b, dist2));
 	list_adj.emplace(node_b, vec2);
 
 	return list_adj;
 }
 
-vector<int> Solution::SPT_A_Star(map<int, vector<pair<int, double>>> list_adj, int start, int goal, int robot_id)
+std::vector<int> Solution::SPT_A_Star(std::map<int, std::vector<std::pair<int, double>>> list_adj, int start, int goal, int robot_id)
 {
-	vector<edge> edges;
+	std::vector<edge> edges;
 	// custo h(dist(node,goal)+custo do node), id do node e o custo do node
-	priority_queue<pair<double, pair<int, double>>, vector<pair<double, pair<int, double>>>, greater<pair<double, pair<int, double>>>> pq;
-
-	map<int, double> path_info;
+	std::priority_queue<std::pair<double, std::pair<int, double>>, std::vector<std::pair<double, std::pair<int, double>>>, std::greater<std::pair<double, std::pair<int, double>>>> pq;
+	std::map<int, double> path_info;
 	auto it_path = path_info.begin();
 
-	vector<int> path_nodes;
-	pair<double, pair<int, double>> pair_info;
+	std::vector<int> path_nodes;
+	std::pair<double, std::pair<int, double>> pair_info;
 	int node;
 	// double path_cost, cost_start_2_node, cost_node_2_goal, h;
 	double path_cost = 0.0,
@@ -7292,7 +7310,7 @@ vector<int> Solution::SPT_A_Star(map<int, vector<pair<int, double>>> list_adj, i
 	double robot_fuel = 0;
 
 	// insert new
-	pq.push(make_pair(0.0, make_pair(start, 0.0)));
+	pq.push(std::make_pair(0.0, std::make_pair(start, 0.0)));
 
 	auto it_adj = list_adj.begin()->second.begin();
 	auto it_list = list_adj.begin();
@@ -7352,7 +7370,7 @@ vector<int> Solution::SPT_A_Star(map<int, vector<pair<int, double>>> list_adj, i
 								robot_fuel = robot_capacity - it_adj->second;
 
 							h = cost_start_2_node + cost_node_2_goal + robot_fuel;
-							pq.push(make_pair(h, make_pair(node, it_adj->second))); // inserir na fila de prioridades
+							pq.push(std::make_pair(h, std::make_pair(node, it_adj->second))); // inserir na fila de prioridades
 						}
 
 						++it_adj; // obter o próximo adjacente
@@ -7538,10 +7556,10 @@ vector<int> Solution::SPT_A_Star(map<int, vector<pair<int, double>>> list_adj, i
 
 void Solution::OpenRandomDepotsOnTargetsPath(path *p)
 {
-	map<int, int> map_depots_on_targets;
+	std::map<int, int> map_depots_on_targets;
 
 	if (!PathRestrictions(*p))
-		cout << "solução não validada" << endl;
+		std::cout << "solução não validada" << std::endl;
 
 	// Obter os depots associados aos targets usados no caminho
 	for (auto &e : p->fuelOnTarget)
@@ -7555,7 +7573,7 @@ void Solution::OpenRandomDepotsOnTargetsPath(path *p)
 		return;
 
 	// Targets sem depósito aberto
-	vector<int> targets_without_depots;
+	std::vector<int> targets_without_depots;
 	for (const auto &m : map_depots_on_targets)
 		targets_without_depots.emplace_back(m.second);
 
@@ -7564,19 +7582,19 @@ void Solution::OpenRandomDepotsOnTargetsPath(path *p)
 
 	int t_size = rand.randNum(targets_without_depots.size());
 	if (t_size > 2)
-		t_size = floor(t_size * 0.5);
+		t_size = std::floor(t_size * 0.5);
 	else if (t_size == 0)
 		return;
 
 	targets_without_depots.resize(t_size);
-	list<int> ltargets(targets_without_depots.begin(), targets_without_depots.end());
-	list<edge> ledges(p->edges.begin(), p->edges.end());
+	std::list<int> ltargets(targets_without_depots.begin(), targets_without_depots.end());
+	std::list<edge> ledges(p->edges.begin(), p->edges.end());
 
 	int robot_id = p->robotID;
 	double robot_capacity = input.getRobotFuel(robot_id);
 	double fuel_remaining, fuel_required;
 
-	set<int> processed_targets;
+	std::set<int> processed_targets;
 
 	auto it_edges = ledges.begin();
 
@@ -7690,10 +7708,10 @@ void Solution::OpenRandomDepotsOnTargetsPath(path *p)
 	p->edges.assign(ledges.begin(), ledges.end());
 
 	// Atualiza os depots associados ao path
-	vector<int> depots(p->depots.begin(), p->depots.end());
+	std::vector<int> depots(p->depots.begin(), p->depots.end());
 	UpdateDepots(p->pID, depots);
 	if (!PathRestrictions(*p))
-		cout << "solução não validada" << endl;
+		std::cout << "solução não validada" << std::endl;
 }
 
 void Solution::openRandomDepot(solution *s)
@@ -7701,9 +7719,9 @@ void Solution::openRandomDepot(solution *s)
 	double new_cost_a2b = 0;
 	int paths_num = s->paths.size();
 	double pcost = 0;
-	list<edge> l_edges;
-	set<int> depots;
-	vector<int> paths_id = rand.randVector(paths_num);
+	std::list<edge> l_edges;
+	std::set<int> depots;
+	std::vector<int> paths_id = rand.randVector(paths_num);
 
 	// procurar um caminho que se possar abrir algum depot e diminuir o custo, iniciar a escolha do caminho de maneira aleatória
 	for (int i : paths_id)
@@ -7712,20 +7730,20 @@ void Solution::openRandomDepot(solution *s)
 		pcost = 0;
 
 		if (!PathRestrictions(*p))
-			cout << "solução não validada" << endl;
+			std::cout << "solução não validada" << std::endl;
 
 		OpenRandomDepotsOnTargetsPath(p);
 
 		updateSolCosts(s);
 
 		// obter os targets iniciais e finais que conectam as linhas de cobertura
-		list<pair<pair<pair<int, int>, double>, vector<int>>> tls = GetTargetsLinkingCLs(*p);
+		std::list<std::pair<std::pair<std::pair<int, int>, double>, std::vector<int>>> tls = GetTargetsLinkingCLs(*p);
 
-		list<pair<pair<pair<int, int>, double>, vector<int>>> tls_temp = tls;
+		std::list<std::pair<std::pair<std::pair<int, int>, double>, std::vector<int>>> tls_temp = tls;
 
 		// ordenar os pares em ordem crescente
-		tls.sort([](const pair<pair<pair<int, int>, double>, vector<int>> &el1,
-					const pair<pair<pair<int, int>, double>, vector<int>> &el2)
+		tls.sort([](const std::pair<std::pair<std::pair<int, int>, double>, std::vector<int>> &el1,
+					const std::pair<std::pair<std::pair<int, int>, double>, std::vector<int>> &el2)
 				 { return (isDefinitelyGreaterThan(el1.first.second, el2.first.second)); });
 
 		// procurar abrir depots entre os diversos targets de ligação da rota, começando da maior.
@@ -7736,7 +7754,7 @@ void Solution::openRandomDepot(solution *s)
 			// obter as referências dos trechos de maior custo
 			int node_a = tls.front().first.first.first;
 			int node_b = tls.front().first.first.second;
-			vector<int> current_link;
+			std::vector<int> current_link;
 
 			// caso não haja nenhum depot
 			if (tls.front().second.empty())
@@ -7761,18 +7779,18 @@ void Solution::openRandomDepot(solution *s)
 			l_edges.insert(l_edges.begin(), p->edges.begin(), p->edges.end());
 
 			// obter o grafo (lista de adjacências) dos depósitos existente entre os targets
-			map<int, vector<pair<int, double>>> list_adj = GetGraphOfDepotsBetween_T2T(node_a, node_b, p->robotID);
+			std::map<int, std::vector<std::pair<int, double>>> list_adj = GetGraphOfDepotsBetween_T2T(node_a, node_b, p->robotID);
 
 			// adicionar os target no grafo, ligar o node_a e node_b aos respectivos depósitos
-			map<int, vector<pair<int, double>>> list_with_targets = AddTargetOnGraph(list_adj, node_a, node_b, p->robotID);
+			std::map<int, std::vector<std::pair<int, double>>> list_with_targets = AddTargetOnGraph(list_adj, node_a, node_b, p->robotID);
 
 			int depot_start = list_with_targets.find(node_a)->second.begin()->first;
 			int depot_goal = list_with_targets.find(node_b)->second.begin()->first;
 
-			vector<int> new_link;
+			std::vector<int> new_link;
 			new_link.emplace_back(node_a);
 			// obter o menor caminho entre node_a e node_b
-			vector<int> spt = SPT_A_Star(list_adj, depot_start, depot_goal, p->robotID);
+			std::vector<int> spt = SPT_A_Star(list_adj, depot_start, depot_goal, p->robotID);
 
 			// se não for possível ligar node_a com node_b
 			if (spt.empty())
@@ -7787,18 +7805,18 @@ void Solution::openRandomDepot(solution *s)
 			// verificar se existe depots diferentes no novo link
 			// ordenar os vetores, necessário para a operação de diferença
 			// como não podemos perder a ordem dos vetores, criamos vetores temporários
-			vector<int> current_link_temp = current_link;
-			vector<int> new_link_temp = new_link;
+			std::vector<int> current_link_temp = current_link;
+			std::vector<int> new_link_temp = new_link;
 
-			sort(current_link_temp.begin(), current_link_temp.end());
-			sort(new_link_temp.begin(), new_link_temp.end());
+			std::sort(current_link_temp.begin(), current_link_temp.end());
+			std::sort(new_link_temp.begin(), new_link_temp.end());
 
 			// criar o vetor de intersecção
-			vector<int> v_inter(current_link.size() + new_link.size());
+			std::vector<int> v_inter(current_link.size() + new_link.size());
 			auto it_v_inter = v_inter.begin();
 
 			// obter os elementos que estão em new_link e não no vetor corrente;
-			it_v_inter = set_difference(new_link_temp.begin(), new_link_temp.end(),
+			it_v_inter = std::set_difference(new_link_temp.begin(), new_link_temp.end(),
 										current_link_temp.begin(), current_link_temp.end(), v_inter.begin());
 			v_inter.resize(it_v_inter - v_inter.begin());
 
@@ -7808,7 +7826,7 @@ void Solution::openRandomDepot(solution *s)
 
 				// montar o caminho no vetor de arestas
 				edge e;
-				vector<edge> edges;
+				std::vector<edge> edges;
 
 				// atribuir os nós do trechos aos arcos e capturar os custos
 				for (auto i = new_link.begin(); (i + 1) != new_link.end(); ++i)
@@ -8005,7 +8023,7 @@ void Solution::openRandomDepot(solution *s)
 				p->pCost = pcost;
 
 				if (!PathRestrictions(*p))
-					cout << "solução não validada" << endl;
+					std::cout << "solução não validada" << std::endl;
 
 				//-----teste temporário da saída-------------------------------------------------------
 
@@ -8021,7 +8039,7 @@ void Solution::openRandomDepot(solution *s)
 				// atualizar o custo da solução;
 				updateSolCosts(s);
 
-				vector<int> all_depots;
+				std::vector<int> all_depots;
 				all_depots.insert(all_depots.end(), s->depots.begin(), s->depots.end());
 				for (uint i = 0; i < s->paths.size(); ++i)
 					UpdateDepots(i, all_depots);
@@ -8038,8 +8056,8 @@ void Solution::pshift(solution *s)
 {
 	path pathG1;
 	path pathG2;
-	vector<int> depots;
-	pair<path, string> path_op;
+	std::vector<int> depots;
+	std::pair<path, std::string> path_op;
 
 	struct pathIndex
 	{
@@ -8048,11 +8066,11 @@ void Solution::pshift(solution *s)
 		int g1Index;
 		int g2Index;
 		int g1LID;
-		string path_op;
+		std::string path_op;
 	};
 
 	pathIndex pIndex;
-	vector<pair<double, pathIndex>> mapCostPaths;
+	std::vector<std::pair<double, pathIndex>> mapCostPaths;
 
 	int line = -1;
 	// int lastLine =-1;
@@ -8065,7 +8083,7 @@ void Solution::pshift(solution *s)
 	{
 
 		// get index of graphs in random order
-		vector<int> graphsIndex = rand.randVector(getNumberOfSets());
+		std::vector<int> graphsIndex = rand.randVector(getNumberOfSets());
 		int nOfCLines = 0;
 
 		int g1Index = graphsIndex.back();
@@ -8078,7 +8096,7 @@ void Solution::pshift(solution *s)
 			return;
 
 		// obter os índices das linhas de cobertura de maneira embaralhada.
-		vector<int> vLines = rand.randVector(nOfCLines);
+		std::vector<int> vLines = rand.randVector(nOfCLines);
 		while (!vLines.empty())
 		{ // enquanto não testar todas as linhas
 
@@ -8134,10 +8152,10 @@ void Solution::pshift(solution *s)
 
 						// teste debug
 						if (!PathRestrictions(pathG1))
-							cout << "solução não validada pshift 1 pathG1" << endl;
+							std::cout << "solução não validada pshift 1 pathG1" << std::endl;
 
 						if (!PathRestrictions(pathG2))
-							cout << "solução não validada pshift 2 pathG2" << endl;
+							std::cout << "solução não validada pshift 2 pathG2" << std::endl;
 
 						//-------------------------------- Testes saída ----------------------------------
 
@@ -8173,7 +8191,7 @@ int Solution::GetNearOpenedDepot(path p, int node_id)
 
 	// começar com número negativo, caso não haja depot próximo ao nó.
 	int depot_id = -1;
-	vector<pair<double, int>> depots_info;
+	std::vector<std::pair<double, int>> depots_info;
 
 	double flight_time = 0;
 	double robot_fuel_available = 0;
@@ -8204,12 +8222,12 @@ int Solution::GetNearOpenedDepot(path p, int node_id)
 		flight_time = getCostOnGraph(p.robotID, node_id, i);
 		// se o combustível no robô for suficiente para atingir o posto
 		if (!isDefinitelyLessThan(robot_fuel_available, flight_time))
-			depots_info.emplace_back(make_pair(flight_time, i));
+			depots_info.emplace_back(std::make_pair(flight_time, i));
 	}
 
 	// ordenar o vetor em relaçao as distância do menor ao maior
 	sort(depots_info.begin(), depots_info.end(),
-		 [](pair<double, int> el1, pair<double, int> el2)
+		 [](std::pair<double, int> el1, std::pair<double, int> el2)
 		 { return isDefinitelyLessThan(el1.first, el2.first); });
 
 	// se houver depot, obter o índice do primeiro
@@ -8220,11 +8238,11 @@ int Solution::GetNearOpenedDepot(path p, int node_id)
 }
 // criar o grafo entre o depots do caminho, as ligações são realizada levando em conta
 // a capacidade do robô.
-map<int, vector<pair<int, double>>> Solution::GetOpenDepotGraphFromPath(path p)
+std::map<int, std::vector<std::pair<int, double>>> Solution::GetOpenDepotGraphFromPath(path p)
 {
 	int robot_id = p.robotID;
-	map<int, vector<pair<int, double>>> list_adj;
-	vector<int> depots;
+	std::map<int, std::vector<std::pair<int, double>>> list_adj;
+	std::vector<int> depots;
 	depots.insert(depots.begin(), p.depots.begin(), p.depots.end());
 
 	unsigned int nvertices = depots.size();
@@ -8234,7 +8252,7 @@ map<int, vector<pair<int, double>>> Solution::GetOpenDepotGraphFromPath(path p)
 	// obter os custos entre os  depots
 	for (unsigned int i = 0; i < nvertices; i++)
 	{
-		it_list_adj = list_adj.emplace_hint(it_list_adj, depots[i], vector<pair<int, double>>());
+		it_list_adj = list_adj.emplace_hint(it_list_adj, depots[i], std::vector<std::pair<int, double>>());
 
 		for (unsigned int j = 0; j < nvertices; j++)
 		{
@@ -8242,7 +8260,7 @@ map<int, vector<pair<int, double>>> Solution::GetOpenDepotGraphFromPath(path p)
 			// caso o robô tenha capacidade de voar de i para j, adicione ao grafo
 			if (isDefinitelyGreaterThan(input.getRobotFuel(robot_id), flight_time, 1.0))
 			{
-				it_list_adj->second.emplace_back(make_pair(depots[j], flight_time));
+				it_list_adj->second.emplace_back(std::make_pair(depots[j], flight_time));
 			}
 		}
 	}
@@ -8252,9 +8270,9 @@ map<int, vector<pair<int, double>>> Solution::GetOpenDepotGraphFromPath(path p)
 
 Solution::path Solution::GetSPTOverOpenDepots(path p, int node_start, int node_goal)
 {
-	vector<edge> edges;
+	std::vector<edge> edges;
 	edge e;
-	map<int, vector<pair<int, double>>> adj_list;
+	std::map<int, std::vector<std::pair<int, double>>> adj_list;
 	path path_result;
 	double robot_capacity = input.getRobotFuel(p.robotID);
 	double fuel_remaining;
@@ -8273,7 +8291,7 @@ Solution::path Solution::GetSPTOverOpenDepots(path p, int node_start, int node_g
 	adj_list = AddNodesOnGraph(adj_list, p, node_start, node_goal);
 
 	// obter o menor caminho entre node_a e node_b
-	vector<int> new_link = SPT_A_Star(adj_list, node_start, node_goal, p.robotID);
+	std::vector<int> new_link = SPT_A_Star(adj_list, node_start, node_goal, p.robotID);
 
 	// caso não haja caminho entre start e goal.
 	if (new_link.empty())
@@ -8344,10 +8362,10 @@ Solution::path Solution::GetSPTOverOpenDepots(path p, int node_start, int node_g
 	return path_result;
 }
 
-map<int, vector<pair<int, double>>> Solution::AddNodesOnGraph(map<int, vector<pair<int, double>>> list_adj,
+std::map<int, std::vector<std::pair<int, double>>> Solution::AddNodesOnGraph(std::map<int, std::vector<std::pair<int, double>>> list_adj,
 															  path p, int node_a, int node_b)
 {
-	map<int, vector<pair<int, double>>> list_adj_temp = list_adj;
+	std::map<int, std::vector<std::pair<int, double>>> list_adj_temp = list_adj;
 	int n1 = 0;
 	int n2 = 0;
 	double time_2_a, time_2_b;
@@ -8421,8 +8439,8 @@ map<int, vector<pair<int, double>>> Solution::AddNodesOnGraph(map<int, vector<pa
 				// it_list_adj_temp->second.emplace_back(make_pair(node_a,time_2_a));
 
 				// criar uma nova lista (node_a) e inserir o vizinho n1
-				it_list_adj_temp = list_adj_temp.emplace_hint(it_list_adj_temp, node_a, vector<pair<int, double>>());
-				it_list_adj_temp->second.emplace_back(make_pair(n1, fuel_consumed + time_2_a));
+				it_list_adj_temp = list_adj_temp.emplace_hint(it_list_adj_temp, node_a, std::vector<std::pair<int, double>>());
+				it_list_adj_temp->second.emplace_back(std::make_pair(n1, fuel_consumed + time_2_a));
 			}
 			++it_list_adj;
 		}
@@ -8444,7 +8462,7 @@ map<int, vector<pair<int, double>>> Solution::AddNodesOnGraph(map<int, vector<pa
 		// obter a lista n2
 		it_list_adj_temp = list_adj_temp.find(depot_on_target_id);
 		// inserir um novo vizinho (node_b) na lista n2
-		it_list_adj_temp->second.emplace_back(make_pair(node_b, time_2_b));
+		it_list_adj_temp->second.emplace_back(std::make_pair(node_b, time_2_b));
 	}
 
 	else
@@ -8472,7 +8490,7 @@ map<int, vector<pair<int, double>>> Solution::AddNodesOnGraph(map<int, vector<pa
 			{
 
 				// inserir um novo vizinho (node_a) na lista n1
-				it_list_adj_temp->second.emplace_back(make_pair(node_b, time_2_b));
+				it_list_adj_temp->second.emplace_back(std::make_pair(node_b, time_2_b));
 			}
 			++it_list_adj;
 		}
@@ -8566,9 +8584,9 @@ bool Solution ::IsBetterSol(solution new_sol, solution incumbent_sol)
  * @param p The path to inspect.
  * @return A vector containing the odd CVL indexes found in p.fuelOnTarget.
  */
-vector<int> Solution::getOddCVLIndexes(const path &p)
+std::vector<int> Solution::getOddCVLIndexes(const path &p)
 {
-	vector<int> odd_indexes;
+	std::vector<int> odd_indexes;
 	for (const auto &[index, fuel] : p.fuelOnTarget)
 	{
 		if (index % 2 != 0)

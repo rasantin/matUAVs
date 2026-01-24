@@ -19,8 +19,6 @@
 #include <map>
 #include <cmath>
 
-using namespace std;
-
 
 class Input {
 
@@ -29,9 +27,9 @@ private:
 	std::vector<Robot> robots;
 	double euclidianDistance(Node &a, Node &b);
 	std::vector<std::vector < std::vector<double> > > F;
-	vector<vector<int>> g;
+	std::vector<std::vector<int>> g;
 
-	typedef pair<double, bool> cell ;
+	typedef std::pair<double, bool> cell ;
 
 	int depotNum = 0;
 	int baseNum = 0;
@@ -45,12 +43,11 @@ private:
 
 	std::vector<int> nodesDepotsIndexes;
 	std::vector<int> nodesTargetsIndexes;
-
 	std::map<int,int> mapTargetDepot;
-
+	
 	void nodesIndexes();
 
-	string file_name;
+	std::string file_name;
 
 
 public:
@@ -91,7 +88,7 @@ public:
 
 	int getDepotIdOnTarget(int id);
 	bool isTarget(int id);
-	string getRobotConfigName(int k);
+	std::string getRobotConfigName(int k);
 
 	int getDepotsInserted();
 
@@ -101,12 +98,10 @@ public:
 
 	int getMaxCVLSubSet();
 
-	vector<int> getDepotsIndexes();
-	vector<int> getTargetsIndexes();
+	std::vector<int> getDepotsIndexes();
+	std::vector<int> getTargetsIndexes();
 
 	void insertDepotsOnTargets();
-
-
 	bool nodesEmpty();
 
 	virtual ~Input();

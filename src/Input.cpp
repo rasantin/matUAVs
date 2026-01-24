@@ -513,7 +513,7 @@ void Input::insertDepotsOnTargets()
 	{
 		n = getNode(t);
 		depotId = insertNodes(n.getX(), n.getY(), "depots");
-		mapTargetDepot.insert(pair<int, int>(t, depotId));
+		mapTargetDepot.insert(std::pair<int, int>(t, depotId));
 	}
 }
 
@@ -722,17 +722,17 @@ int Input::getDepotsInserted()
 	return depotsInserted;
 }
 
-vector<int> Input::getDepotsIndexes()
+std::vector<int> Input::getDepotsIndexes()
 {
 	return nodesDepotsIndexes;
 }
 
-vector<int> Input::getTargetsIndexes()
+std::vector<int> Input::getTargetsIndexes()
 {
 	return nodesTargetsIndexes;
 }
 
-string Input::getRobotConfigName(int k)
+std::string Input::getRobotConfigName(int k)
 {
 	return robots[k].getRobotConfigName();
 }

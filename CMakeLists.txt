@@ -87,6 +87,7 @@ set(SOURCES
     src/Rand.cpp
     src/Robot.cpp
     src/Solution.cpp
+    src/SolverContext.cpp
 )
 
 # ===============================

@@ -27,7 +27,7 @@ Output::~Output() {
 
 void Output::writeNodes() {
     ofstream file;
-    string nodesFile = nodesPath + "/nodes.txt";
+    std::string nodesFile = nodesPath + "/nodes.txt";
 
     file.open(nodesFile);
     if(file.is_open() && !input.nodes.empty()) {
@@ -67,13 +67,13 @@ void Output::createDir(int it) {
     }
 }
 
-void Output::writeSolution(Solution sol, int it, string op, Solution::alog vars) {
-    string fileName = solutionPath + "/solution_" + to_string(it) + "_" + op;
+void Output::writeSolution(Solution sol, int it, std::string op, Solution::alog vars) {
+    std::string fileName = solutionPath + "/solution_" + std::to_string(it) + "_" + op;
 
     if(op != "init" && op != "best") {
-        fileName += "_G" + to_string(vars.g1) + "_L" + to_string(vars.l1) + ":G" + to_string(vars.g2);
+        fileName += "_G" + std::to_string(vars.g1) + "_L" + std::to_string(vars.l1) + ":G" + std::to_string(vars.g2);
         if(vars.l2 != -1) {
-            fileName += "_L" + to_string(vars.l2);
+            fileName += "_L" + std::to_string(vars.l2);
         }
     }
     fileName += ".txt";
@@ -98,16 +98,16 @@ void Output::writeSolution(Solution sol, int it, string op, Solution::alog vars)
     file.close();
 }
 
-void Output::writeOutput(double maxCost, int iter, string op) {
-    string outputPath = execPath + "/output.txt";
-    ofstream outputFile(outputPath, ios::out | ios::app);
+void Output::writeOutput(double maxCost, int iter, std::string op) {
+    std::string outputPath = execPath + "/output.txt";
+    std::ofstream outputFile(outputPath, std::ios::out | std::ios::app);
     outputFile << iter << " " << maxCost << " " << op << "\n";
     outputFile.close();
 }
 
-void Output::writeSolutions(Solution sol, string op) {
-    string solutionsPath = execPath + "/solutions.txt";
-    ofstream solutionsFile(solutionsPath, ios::out | ios::app);
+void Output::writeSolutions(Solution sol, std::string op) {
+    std::string solutionsPath = execPath + "/solutions.txt";
+    std::ofstream solutionsFile(solutionsPath, std::ios::out | std::ios::app);
 
     solutionsFile << op << " ";
     for(const auto& path : sol.currentSol.paths) {
@@ -117,13 +117,13 @@ void Output::writeSolutions(Solution sol, string op) {
     solutionsFile.close();
 }
 
-void Output::writeParetoSet(Solution sol, string pname, string iName, string date,
-                            double elapsed_time, int targetsNum, vector<bool> validation,
+void Output::writeParetoSet(const Solution& sol, std::string pname, std::string iName, std::string date,
+                            double elapsed_time, int targetsNum, std::vector<bool> validation,
                             int nexec, int total_exec, int m, int n, int cvl_subset_num) {
     int nsol = 1;
 
-    string solutions = execPath + "solutions.txt";
-    ofstream solutionsFile(solutions, ios::out | ios::app);
+    std::string solutions = execPath + "solutions.txt";
+    std::ofstream solutionsFile(solutions, std::ios::out | std::ios::app);
 
     bool val = all_of(validation.begin(), validation.end(), [](bool v) { return v; });
 
@@ -143,18 +143,18 @@ void Output::writeParetoSet(Solution sol, string pname, string iName, string dat
 
     uint valpos = 0;
     for(auto& s : sol.paretoSet) {
-        solutionsFile.open(solutions, ios::out | ios::app);
+        solutionsFile.open(solutions, std::ios::out | std::ios::app);
         solutionsFile << s.second.depotsNum << ";" << s.second.maxCost << ";" << s.second.sCost << "\n";
         solutionsFile.close();
 
-        string solution = createDirSol(nsol);
-        string solutionName = solution + "/sol_" + to_string(nsol) + ".txt";
+        std::string solution = createDirSol(nsol);
+        std::string solutionName = solution + "/sol_" + std::to_string(nsol) + ".txt";
 
-        ofstream solutionFile(solutionName, ios::out | ios::app);
+        std::ofstream solutionFile(solutionName, std::ios::out | std::ios::app);
         solutionFile << "Depots|Largest path cost| Total cost\n"
                      << s.second.depotsNum << ";" << s.second.maxCost << ";" << s.second.sCost << "\n";
 
-        solutionsFile.open(solutions, ios::out | ios::app);
+        solutionsFile.open(solutions, std::ios::out | std::ios::app);
         solutionsFile << "Solution Validated: " << boolalpha << validation[valpos] << "\n";
         solutionsFile.close();
 
@@ -163,8 +163,8 @@ void Output::writeParetoSet(Solution sol, string pname, string iName, string dat
 
         int npath = 0;
         for(auto& p : s.second.paths) {
-            string path = solution + "/path_" + to_string(npath) + ".txt";
-            ofstream pathFile(path, ios::out | ios::app);
+            std::string path = solution + "/path_" + std::to_string(npath) + ".txt";
+            std::ofstream pathFile(path, std::ios::out | std::ios::app);
 
             pathFile << "Depots|Largest paths cost|Robot ID\n"
                      << p.depotsNum << ";" << p.pCost << ";" << p.robotID << "\n";
@@ -186,30 +186,30 @@ void Output::writeParetoSet(Solution sol, string pname, string iName, string dat
     execPath = instPath;
 }
 
-string Output::createPathDir(string sol, int path) {
-    string sol_dir = sol + "/path_" + to_string(path);
+std::string Output::createPathDir(std::string sol, int path) {
+    std::string sol_dir = sol + "/path_" + std::to_string(path);
     if(!fs::exists(sol_dir)) {
         fs::create_directories(sol_dir);
     }
     return sol_dir;
 }
 
-string Output::createDirSol(int sol) {
-    string sol_dir = execPath + "sol_" + to_string(sol);
+std::string Output::createDirSol(int sol) {
+    std::string sol_dir = execPath + "sol_" + std::to_string(sol);
     if(!fs::exists(sol_dir)) {
         fs::create_directories(sol_dir);
     }
     return sol_dir;
 }
 
-void Output::createDirInst(string iName) {
+void Output::createDirInst(std::string iName) {
     size_t found_point = iName.find(".");
     size_t found_bar = iName.find_last_of("/\\");
 
-    string inst_path;
-    if(found_point != string::npos && found_bar != string::npos)
+    std::string inst_path;
+    if(found_point != std::string::npos && found_bar != std::string::npos)
         inst_path = iName.substr(found_bar + 1, found_point - found_bar - 1);
-    else if(found_point != string::npos)
+    else if(found_point != std::string::npos)
         inst_path = iName.substr(0, found_point);
     else
         inst_path = iName;
@@ -229,17 +229,17 @@ void Output::createDirOutput() {
     }
 }
 
-void Output::createDataDir(string date) {
+void Output::createDataDir(std::string date) {
     execPath += date + "/";
     if(!fs::exists(execPath)) {
         fs::create_directories(execPath);
     }
 }
 
-void Output::writePredictions(Solution sol) {
+void Output::writePredictions(const Solution& sol) {
     if(!sol.vec_predictions.empty()) {
-        string predictions = execPath + "predictions.txt";
-        ofstream predictionsFile(predictions, ios::out | ios::app);
+        std::string predictions = execPath + "predictions.txt";
+        std::ofstream predictionsFile(predictions, std::ios::out | std::ios::app);
 
         if(sol.vec_predictions.front().pred_id == 0) {
             predictionsFile << "pred_idpred_num;pred_imp_id;best_pred;op;path_op_g1time_op_g2path_op_g2time_op_g2\n";
@@ -255,10 +255,10 @@ void Output::writePredictions(Solution sol) {
     }
 }
 
-void Output::gurobiCallInfo(Solution sol) {
+void Output::gurobiCallInfo(const Solution& sol) {
     if(!sol.vec_call.empty()) {
-        string gurobi_call = execPath + "gurobi_info.txt";
-        ofstream call_File(gurobi_call, ios::out | ios::app);
+        std::string gurobi_call = execPath + "gurobi_info.txt";
+        std::ofstream call_File(gurobi_call, std::ios::out | std::ios::app);
 
         if(sol.vec_call.front().call_id == 1) {
             call_File << "call_id;model_type;optimize_time;feasible;target_num;depot_num\n";
@@ -273,10 +273,10 @@ void Output::gurobiCallInfo(Solution sol) {
     }
 }
 
-bool Output::fileExists(const string& filename) {
+bool Output::fileExists(const std::string& filename) {
     return fs::exists(filename);
 }
 
-void Output::createOutput(string date){
+void Output::createOutput(std::string date){
 	createDataDir(date);
 }

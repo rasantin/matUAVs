@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <map>
 #include <cmath>
+#include <set>
 
 
 class Input {
@@ -48,6 +49,9 @@ private:
 	void nodesIndexes();
 
 	std::string file_name;
+
+	std::set<std::pair<int,int>> blocked_edges;
+
 
 
 public:
@@ -103,6 +107,14 @@ public:
 
 	void insertDepotsOnTargets();
 	bool nodesEmpty();
+
+	const std::set<std::pair<int,int>>& getBlockedEdges() const;
+
+	bool isBlockedEdge(int u, int v) const;
+
+
+
+  
 
 	virtual ~Input();
 };

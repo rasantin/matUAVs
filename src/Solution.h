@@ -25,6 +25,8 @@
 #include <unordered_map>
 #include <utility>  // std::pair
 
+#include <optional>
+
 	// Functor para permitir unordered_map com std::pair<int, int> como chave
 	struct pair_hash
 	{
@@ -143,7 +145,7 @@
 		std::map<int, std::vector<std::pair<int, double>>> GetGraphOfDepotsBetween_T2T(int a, int b, int robot_id);
 		std::map<int, std::vector<std::pair<int, double>>> GetOpenDepotGraphFromPath(path p);
 
-		std::map<int, std::vector<std::pair<int, double>>> AddTargetOnGraph(std::map<int, std::vector<std::pair<int, double>>> list_adj,
+		std::optional<std::map<int, std::vector<std::pair<int, double>>>> AddTargetOnGraph(std::map<int, std::vector<std::pair<int, double>>> list_adj,
 															 int node_a, int node_b, int robot_id);
 		std::map<int, std::vector<std::pair<int, double>>> AddNodesOnGraph(std::map<int, std::vector<std::pair<int, double>>> list_adj, path p,
 															int node_a, int node_b);
@@ -168,6 +170,14 @@
 		bool initialSolution = true;
 		int call_num = 0;
 		int pred_num = 0;
+
+		void checkDepotsConsistency(path *p, std::list<edge> l_edges);
+
+
+		void RebuildDepots(path *p);
+		bool RebuildFuel(path *p);
+		bool InsertDepotBeforeEdge(path* p,
+                                     std::list<std::pair<int,int>>::iterator it);
 
 	public:
 		struct alog

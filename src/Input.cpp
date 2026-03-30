@@ -59,11 +59,11 @@ void Input::readFile(std::string fileName)
 	if (ifs.is_open())
 	{
 		std::string sectionType;
-
-		while (ifs.good())
+		while (std::getline(ifs, line))
 		{
 
-			getline(ifs, line);
+			if (!line.empty() && line.back() == '\r')
+    			line.pop_back();
 
 			// define operation and continue
 			if (line.compare("@target") == 0)
@@ -75,6 +75,12 @@ void Input::readFile(std::string fileName)
 			else if (line.compare("@depot") == 0)
 			{
 				sectionType = "depot";
+				continue;
+			}
+			
+			else if (line.compare("@blocked_edges") == 0)
+			{
+				sectionType = "blocked_edges";
 				continue;
 			}
 
@@ -119,8 +125,7 @@ void Input::readFile(std::string fileName)
 			}
 
 			// check if the line is not empty or isn't the label line.
-			if (!line.empty() && !sectionType.empty() &&
-				!line.compare(sectionType) == 0 && !line.compare(" ") == 0)
+			if (!line.empty() && !sectionType.empty() && line != sectionType && line != " ")
 			{
 
 				// get the robots id and his base position on //base node section(@base)
@@ -194,6 +199,22 @@ void Input::readFile(std::string fileName)
 					catch (const std::invalid_argument &e)
 					{
 						std::cerr << " The function stod() could not convert the arguments " << line << " to <double, double> " << '\n';
+					}
+				}
+				
+				else if (sectionType.compare("blocked_edges") == 0)
+				{
+					try
+					{
+						int t1 = std::stoi(line, &sz);
+						int t2 = std::stoi(line.substr(sz));
+						if(t1 > t2) std::swap(t1, t2);
+
+						blocked_edges.emplace(t1,t2);
+					}
+					catch (const std::invalid_argument &e)
+					{
+						std::cerr << " The function stod() could not convert the arguments " << line << " to <int, int> " << '\n';
 					}
 				}
 
@@ -343,6 +364,12 @@ void Input::readFile(std::string fileName)
 		it = basemap.find(nodes[i].getNodeBaseName());
 		if (it == basemap.end())
 		{
+
+
+			std::cout << "Base missing at nodeId "
+              << nodes[i].getNodeId()
+              << " coords (" << nodes[i].getX()
+              << "," << nodes[i].getY() << ")\n";
 			nodes[i].setNodeBaseName("");
 			nodes[i].setNodeType("depot");
 			missingBases = true;
@@ -373,11 +400,12 @@ void Input::readFile(std::string fileName)
 	// criar vetores com os indices de targets e depots.
 	nodesIndexes();
 	insertDepotsOnTargets();
+	sortNodes(false);
+
 }
 
 void Input::nodesIndexes()
 {
-
 	nodesDepotsIndexes.clear();
 	nodesTargetsIndexes.clear();
 
@@ -392,6 +420,8 @@ void Input::nodesIndexes()
 
 	sort(nodesDepotsIndexes.begin(), nodesDepotsIndexes.end());
 	sort(nodesTargetsIndexes.begin(), nodesTargetsIndexes.end());
+
+
 }
 
 void Input::printNodes()
@@ -399,6 +429,7 @@ void Input::printNodes()
 	for (unsigned int i = 0; i < nodes.size(); i++)
 	{
 		std::cout << nodes[i].getNodeType() << " " << nodes[i].getNodeId() << " ==> ( " << nodes[i].getX() << "," << nodes[i].getY() << ") \n";
+	
 	}
 }
 
@@ -420,8 +451,7 @@ void Input::sortNodes(bool changeID)
 {
 
 	int id = 0;
-
-	auto sortRuleLambda = [](const Node &n1, const Node &n2) -> bool
+	/*auto sortRuleLambda = [](const Node &n1, const Node &n2) -> bool
 	{
 		if (n1.getNodeTypeId() == n2.getNodeTypeId())
 			if (n1.getX() == n2.getX())
@@ -430,6 +460,10 @@ void Input::sortNodes(bool changeID)
 				return (n1.getX() < n2.getX());
 		else
 			return (n1.getNodeTypeId() < n2.getNodeTypeId());
+	};*/
+	auto sortRuleLambda = [](const Node &a, const Node &b)
+	{
+    	return std::make_tuple(a.getNodeTypeId(), a.getX(), a.getY()) < std::make_tuple(b.getNodeTypeId(), b.getX(), b.getY());
 	};
 
 	std::sort(nodes.begin(), nodes.end(), sortRuleLambda);
@@ -451,13 +485,7 @@ int Input::insertNodes(double x, double y, std::string type)
 
 	// insert on nodes
 	nodes.emplace_back(x, y, type);
-
-	// sort considering position(x,y), not change the id of new node
-	sortNodes(false);
-
-	// reconstruir os vetores de indices de targets e depots.
-	// nodesIndexes();
-
+	
 	// new node id
 	int nodeId = nodes.size() - 1;
 
@@ -473,31 +501,6 @@ int Input::insertNodes(double x, double y, std::string type)
 		depotsInserted++;
 
 		nodesDepotsIndexes.emplace_back(nodeId);
-
-		//		vector<int> robotsIndex;
-		//		vector<int>:: iterator itR;
-
-		/*	//update robot pointer to baseID, find baseid address at nodes and insert next pointer into robots baseid address
-			for(uint r = 0; r<robots.size();r++)
-				robotsIndex.push_back(r);
-
-			//make only k robots iterations
-			while(!robotsIndex.empty()){
-				itR = robotsIndex.begin();
-				auto rptr = robots[*itR].getBasePtr();
-				//start from the end, get the baseIDs first.
-				for(int i = depotNum-1 ; i >= 0; i--){
-					auto nptr = nodes[i].getNodeIdPtr();
-
-					//if the nodes baseid and robot's baseid address are the same, then point the robot's baseid to the next node's baseid.
-					if(nptr == rptr){
-						robots[*itR].setRobotBaseId(nodes[i+1].getNodeIdPtr());
-						robotsIndex.erase(itR);
-						break;
-					}
-				}
-				itR++;
-			}*/
 	}
 
 	return nodeId;
@@ -512,9 +515,10 @@ void Input::insertDepotsOnTargets()
 	for (int t : nodesTargetsIndexes)
 	{
 		n = getNode(t);
-		depotId = insertNodes(n.getX(), n.getY(), "depots");
+		depotId = insertNodes(n.getX(), n.getY(), "depot");
 		mapTargetDepot.insert(std::pair<int, int>(t, depotId));
 	}
+
 }
 
 int Input::getDepotIdOnTarget(int id)
@@ -620,26 +624,7 @@ void Input::initMCost(std::vector<std::vector<cell>>& G)
     }
 }
 
-// create a vxv matrix with all edges costs
-/*void Input::calculeFuelCosts(){
 
-	maxFuelCost.resize(getRobotNum());
-	constM.resize(getRobotNum());
-
-	for(unsigned int i =0; i<nodes.size();i++){
-		F.push_back(std::vector<std::vector<double> >());
-		for(unsigned int j =0; j<nodes.size();j++){
-			F[i].push_back(std::vector<double> ());
-			for(unsigned int k =0; k<robots.size();k++){
-				F[i][j].push_back(euclidianDistance(nodes[i],nodes[j])/robots[k].getMaxVel());
-				if(F[i][j][k] > maxFuelCost[k]){
-					maxFuelCost[k] = F[i][j][k];
-					constM[k]=robots[k].getMaxFuel()+ maxFuelCost[k];
-				}
-			}
-		}
-	}
-}*/
 
 void Input::calculeFuelCosts()
 {
@@ -756,3 +741,15 @@ int Input::getM()
 {
 	return m;
 }
+
+
+const std::set<std::pair<int,int>>& Input:: getBlockedEdges() const{
+	return blocked_edges;
+}
+
+bool Input::isBlockedEdge(int u, int v) const
+{
+    return blocked_edges.count({u,v}) > 0 ||
+           blocked_edges.count({v,u}) > 0;
+}
+

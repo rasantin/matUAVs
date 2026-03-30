@@ -8,255 +8,1341 @@
 #include "Graph.h"
 #include <cassert>
 
+Graph::~Graph()
+{
+	// TODO Auto-generated destructor stub
+}
 
-	Graph::~Graph()
+void Graph::reset()
+{
+	// limpar todas as estruturas de dados
+	graph.clear();
+	nodeIdToIndex.clear();
+	indexToNodeId.clear();
+	graphDepotsIndexes.clear();
+	graphTargetsIndexes.clear();
+	mapNodesTypes.clear();
+	mapRobotGroup.clear();
+	mapRobotGroup_Bckup.clear();
+	mapGroupRobot.clear();
+	mapGroupRobot_Bckup.clear();
+	map_cvset_id_to_node_id.clear();
+	min_fuel.clear();
+	nGraphs.clear();
+	coverageSets.clear();
+	coverage_set.first.clear();
+	coverage_set.second = graphInfo();
+	cLines = 0;
+	nRobots = 0;
+	nLines = 0.0;
+	nodesX.clear();
+	cvl_subset_num = 5;
+	nodesSets.clear();
+	nodesSets_Bckup.clear();
+	link_nid_to_ninfo.clear();
+	map_nodes_on_cl.clear();
+}
+
+// build initial complete graph
+void Graph::buildGraph()
+{
+	graph.clear();
+	unsigned int vertices = input.getNodesNum();
+
+	// Criar a matriz NxN
+	graph.resize(vertices, std::vector<double>(vertices, 0.0));
+
+	int index_n1 = 0;
+	for (const Node &n1 : input.nodes)
 	{
-		// TODO Auto-generated destructor stub
-	}
-
-	void Graph::reset()
-	{
-		// limpar todas as estruturas de dados
-		graph.clear();
-		nodeIdToIndex.clear();
-		indexToNodeId.clear();
-		graphDepotsIndexes.clear();
-		graphTargetsIndexes.clear();
-		mapNodesTypes.clear();
-		mapRobotGroup.clear();
-		mapRobotGroup_Bckup.clear();
-		mapGroupRobot.clear();
-		mapGroupRobot_Bckup.clear();
-		map_cvset_id_to_node_id.clear();
-		min_fuel.clear();
-		nGraphs.clear();
-		coverageSets.clear();
-		coverage_set.first.clear();
-		coverage_set.second = graphInfo();
-		cLines = 0;
-		nRobots = 0;
-		nLines = 0.0;
-		nodesX.clear();
-		cvl_subset_num = 5;
-		nodesSets.clear();
-		nodesSets_Bckup.clear();
-		link_nid_to_ninfo.clear();
-		map_nodes_on_cl.clear();
-	}
-
-	// build initial complete graph
-	void Graph::buildGraph()
-	{
-		graph.clear();
-		unsigned int vertices = input.getNodesNum();
-
-		// Criar a matriz NxN
-		graph.resize(vertices, std::vector<double>(vertices, 0.0));
-
-		int index_n1 = 0;
-		for (const Node &n1 : input.nodes)
+		// Classificar o tipo do nó
+		switch (n1.getNodeTypeId())
 		{
-			// Classificar o tipo do nó
-			switch (n1.getNodeTypeId())
-			{
-			case 0: // Depot
-				graphDepotsIndexes.emplace_back(n1.getNodeId());
-				mapNodesTypes.emplace(std::make_pair(n1.getNodeId(),0));
-				break;
-			case 1: // Base
-				mapNodesTypes[n1.getNodeId()] = 1;
-				break;
-			case 2: // Target
-				graphTargetsIndexes.emplace_back(n1.getNodeId());
-				mapNodesTypes.emplace(std::make_pair(n1.getNodeId(),2));				
-				break;
-			}
-			index_n1++;
+		case 0: // Depot
+			graphDepotsIndexes.emplace_back(n1.getNodeId());
+			mapNodesTypes.emplace(std::make_pair(n1.getNodeId(), 0));
+			break;
+		case 1: // Base
+			mapNodesTypes[n1.getNodeId()] = 1;
+			break;
+		case 2: // Target
+			graphTargetsIndexes.emplace_back(n1.getNodeId());
+			mapNodesTypes.emplace(std::make_pair(n1.getNodeId(), 2));
+			break;
 		}
-
-		// Preencher os custos entre todos os pares (grafo completo)
-		for (const Node &n1 : input.nodes)
-		{
-			for (const Node &n2 : input.nodes)
-			{
-				int i = n1.getNodeId();
-				int j = n2.getNodeId();
-				graph[i][j] = input.getDistance(n1, n2);
-			}
-		}
-
-		std::sort(graphTargetsIndexes.begin(), graphTargetsIndexes.end());
-		std::sort(graphDepotsIndexes.begin(), graphDepotsIndexes.end());
+		index_n1++;
 	}
 
-	// print the initial complete graph
-	void Graph::printGraph()
+	// Preencher os custos entre todos os pares (grafo completo)
+	for (const Node &n1 : input.nodes)
 	{
-		for (unsigned int i = 0; i < graph.size(); i++)
+		for (const Node &n2 : input.nodes)
 		{
-			for (unsigned int j = 0; j < graph.size(); j++)
-			{
-				std::cout << graph[i][j] << " ";
-			}
-			std::cout << "\n";
+			int i = n1.getNodeId();
+			int j = n2.getNodeId();
+			graph[i][j] = input.getDistance(n1, n2);
 		}
 	}
 
-	void Graph::splitGraph()
+	std::sort(graphTargetsIndexes.begin(), graphTargetsIndexes.end());
+	std::sort(graphDepotsIndexes.begin(), graphDepotsIndexes.end());
+}
+
+double Graph::getFeasibleDistance(int robotID, int src, int dst)
+{
+	const double INF = std::numeric_limits<double>::infinity();
+
+	if (src == dst)
+		return 0.0;
+
+	int N = graph.size();
+	std::vector<double> dist(N, INF);
+	std::vector<bool> visited(N, false);
+
+	// min-heap (distância, nó)
+	using pii = std::pair<double, int>;
+	std::priority_queue<pii, std::vector<pii>, std::greater<pii>> pq;
+	dist[src] = 0.0;
+	pq.push({0.0, src});
+
+	while (!pq.empty())
 	{
+		auto [current_dist, u] = pq.top();
+		pq.pop();
 
-		// Declaring a set that will store the pairs using above comparison
-		std::map<int, double> mapOfLines;
+		if (visited[u])
+			continue;
+		visited[u] = true;
 
-		nRobots = input.getRobotNum();
-		cLines = input.getTargetNum() / 2;
-		nLines = (cLines / nRobots);
+		// chegou no destino
+		if (u == dst)
+			return current_dist;
 
-		// dividir a quantidade de linhas de cobertura (cLines) por cada robô disponível (nRobots)
-		// com a menor variação das quantidades entre os grupos
-
-		// vetor com número de linhas por robô
-		std::vector<int> nLGroup;
-
-		// quantidade de robôs que receberão o maior número linhas
-		int nLinesVMax = cLines - (floor(nLines) * nRobots);
-		// maior valor para grupo de linhas que tem quantidade nLinesVMax
-		int vMax = ceil(nLines);
-		// menor valor para grupo de linhas que tem quantidade nLinesVMin
-		int vMin = floor(nLines);
-		// definido a quantidade de robôs utilizando o maior número de linhas
-		// determinamos o número de linhas restante (resto) para os robôs
-		// que terão os grupos de menor quantidade de linhas
-		int resto = cLines - (nLinesVMax * ceil(nLines));
-		// calcular o número de robô para a menor quantidade de linhas
-		int nLinesVMin = resto / floor(nLines);
-
-		for (int i = 0; i < nLinesVMax; i++)
-			nLGroup.push_back(vMax);
-
-		for (int i = 0; i < nLinesVMin; i++)
-			nLGroup.push_back(vMin);
-
-		int split = 0;
-		int ind = 0;
-
-		// indices dos nós
-		std::vector<int> index;
-
-		// create vector of all targets indices
-		for (int i = input.getDepotNum(); i < input.getNodesNum(); i = i + 2)
-			index.push_back(input.nodes[i].nodeId);
-
-		// agrupar todas as linhas
-		while (!index.empty())
+		// percorrer vizinhos de u
+		for (int v = 0; v < N; v++)
 		{
-			mapOfLines.clear();
-			// linha de cobertura de referência, começando da linha mais à esquerda
-			std::vector<int>::iterator i = index.begin();
+			if (u == v)
+				continue; // Ignorar auto-arestas
+			if (input.isBlockedEdge(u, v))
+				continue; // Ignorar arestas bloqueadas
 
-			// obter as distâncias dos nós i e i+1 da linha de referência  em relação aos demais nós.
-			mapOfLines.insert(std::pair<int, double>(*i, 0));
-			for (std::vector<int>::iterator j = index.begin() + 1; j != index.end(); ++j)
+			double weight = graph[u][v];
+			if (weight >= INF)
+				continue; // Ignorar arestas inexistentes
+			if (dist[v] > current_dist + weight)
 			{
-
-				double value = (graph[*i][*j] + graph[*i + 1][*j + 1]);
-
-				// build a map of lines
-				mapOfLines.insert(std::pair<int, double>(*j, value));
+				dist[v] = current_dist + weight;
+				pq.push({dist[v], v});
 			}
-			// cout <<"-------------------------\n";
+		}
+	}
+	return INF; // Destino inalcançável
+}
 
-			// criar o conjunto ordenado (crescente) das distâncias entre a linha representada
-			// pelo indice i
-			std::set<std::pair<int, double>, Comparator> setOfLines(
-				mapOfLines.begin(), mapOfLines.end(), compFunctor);
+double Graph::getDistanceBetweenLines(int robotID, int a, int b)
+{
+	const double INF = 1e9;
 
-			// splitting setOfLines in n nearest lines(nlines).
-			// each lines is represented for one node index.
-			// divisão do conjunto stLines em n linhas mais próximas
-			nodesSets.push_back(Set());
+	int a1 = a;
+	int a2 = a + 1;
 
-			// obter a quantidad de linhas do grupo
-			split = nLGroup.back();
+	int b1 = b;
+	int b2 = b + 1;
 
-			// remover a quantidade de linhas do grupo do vetor
-			nLGroup.pop_back();
-			int sum = 0;
-			for (std::set<std::pair<int, double>, Comparator>::iterator it = setOfLines.begin(); it != setOfLines.end(); ++it)
+	double best = INF;
+
+	// testar todas combinações entre extremidades
+	double d;
+
+	auto tryDistance = [&](int from, int to)
+	{
+		if (from < 0 || from + 1 >= graph.size())
+			return;
+		if (to < 0 || to + 1 >= graph.size())
+			return;
+
+		double d = getFeasibleDistance(robotID, from, to);
+		if (d < best)
+			best = d;
+	};
+
+	tryDistance(a1, b1);
+	tryDistance(a1, b2);
+	tryDistance(a2, b1);
+	tryDistance(a2, b2);
+
+	return best;
+}
+
+// print the initial complete graph
+void Graph::printGraph()
+{
+	for (unsigned int i = 0; i < graph.size(); i++)
+	{
+		for (unsigned int j = 0; j < graph.size(); j++)
+		{
+			std::cout << graph[i][j] << " ";
+		}
+		std::cout << "\n";
+	}
+}
+
+void Graph::splitGraph()
+{
+
+	// Declaring a set that will store the pairs using above comparison
+	std::map<int, double> mapOfLines;
+
+	nRobots = input.getRobotNum();
+	cLines = input.getTargetNum() / 2;
+	nLines = (cLines / nRobots);
+
+	// dividir a quantidade de linhas de cobertura (cLines) por cada robô disponível (nRobots)
+	// com a menor variação das quantidades entre os grupos
+
+	// vetor com número de linhas por robô
+	std::vector<int> nLGroup;
+
+	// quantidade de robôs que receberão o maior número linhas
+	int nLinesVMax = cLines - (floor(nLines) * nRobots);
+	// maior valor para grupo de linhas que tem quantidade nLinesVMax
+	int vMax = ceil(nLines);
+	// menor valor para grupo de linhas que tem quantidade nLinesVMin
+	int vMin = floor(nLines);
+	// definido a quantidade de robôs utilizando o maior número de linhas
+	// determinamos o número de linhas restante (resto) para os robôs
+	// que terão os grupos de menor quantidade de linhas
+	int resto = cLines - (nLinesVMax * ceil(nLines));
+	// calcular o número de robô para a menor quantidade de linhas
+	int nLinesVMin = resto / floor(nLines);
+
+	for (int i = 0; i < nLinesVMax; i++)
+		nLGroup.push_back(vMax);
+
+	for (int i = 0; i < nLinesVMin; i++)
+		nLGroup.push_back(vMin);
+
+	int split = 0;
+	int ind = 0;
+
+	// indices dos nós
+	std::vector<int> index;
+
+	// create vector of all targets indices
+	for (int i = input.getDepotNum(); i < input.getNodesNum(); i = i + 2)
+		index.push_back(input.nodes[i].nodeId);
+
+	// agrupar todas as linhas
+	while (!index.empty())
+	{
+		mapOfLines.clear();
+		// linha de cobertura de referência, começando da linha mais à esquerda
+		std::vector<int>::iterator i = index.begin();
+
+		// obter as distâncias dos nós i e i+1 da linha de referência  em relação aos demais nós.
+		mapOfLines.insert(std::pair<int, double>(*i, 0));
+		for (std::vector<int>::iterator j = index.begin() + 1; j != index.end(); ++j)
+		{
+
+			double value = (graph[*i][*j] + graph[*i + 1][*j + 1]);
+
+			// build a map of lines
+			mapOfLines.insert(std::pair<int, double>(*j, value));
+		}
+		// cout <<"-------------------------\n";
+
+		// criar o conjunto ordenado (crescente) das distâncias entre a linha representada
+		// pelo indice i
+		std::set<std::pair<int, double>, Comparator> setOfLines(
+			mapOfLines.begin(), mapOfLines.end(), compFunctor);
+
+		// splitting setOfLines in n nearest lines(nlines).
+		// each lines is represented for one node index.
+		// divisão do conjunto stLines em n linhas mais próximas
+		nodesSets.push_back(Set());
+
+		// obter a quantidad de linhas do grupo
+		split = nLGroup.back();
+
+		// remover a quantidade de linhas do grupo do vetor
+		nLGroup.pop_back();
+		int sum = 0;
+		for (std::set<std::pair<int, double>, Comparator>::iterator it = setOfLines.begin(); it != setOfLines.end(); ++it)
+		{
+			if (sum < split)
 			{
-				if (sum < split)
+				// encontrar o índice da linha mais próxima da linha de referência e removê-la
+				//  de index que controla a rodada de busca.
+				for (std::vector<int>::iterator vi = index.begin(); vi != index.end(); vi++)
 				{
-					// encontrar o índice da linha mais próxima da linha de referência e removê-la
-					//  de index que controla a rodada de busca.
-					for (std::vector<int>::iterator vi = index.begin(); vi != index.end(); vi++)
+					if ((*it).first == *vi)
 					{
-						if ((*it).first == *vi)
-						{
-							// adicionar o índice da linha ao grupo
-							nodesSets[ind].cvLines.push_back((*it).first);
-							index.erase(vi);
-							break;
-						}
+						// adicionar o índice da linha ao grupo
+						nodesSets[ind].cvLines.push_back((*it).first);
+						index.erase(vi);
+						break;
 					}
 				}
-				sum++;
 			}
-			setOfLines.clear();
-			ind++;
+			sum++;
 		}
+		setOfLines.clear();
+		ind++;
+	}
 
-		// ordenar  nós relativo a posição X de cada nó em nodesX;
-		sortNodesX();
+	// ordenar  nós relativo a posição X de cada nó em nodesX;
+	sortNodesX();
 
-		// obter apenas os depots que estão entre as linhas de cobertura
-		for (unsigned int i = 0; i < nodesSets.size(); i++)
+	// obter apenas os depots que estão entre as linhas de cobertura
+	for (unsigned int i = 0; i < nodesSets.size(); i++)
+	{
+		auto result = minmax_element(nodesSets[i].cvLines.begin(), nodesSets[i].cvLines.end());
+		nodesSets[i].depots = getDepotsBetweenNodes(*result.first, *result.second);
+	}
+
+	std::cout << "Numero de grupos: " << nodesSets.size() << "\n";
+	for (unsigned int i = 0; i < nodesSets.size(); i++)
+	{
+		std::cout << "Grupo: " << i << std::endl;
+
+		std::cout << "Targets: " << "=>";
+		for (unsigned int j = 0; j < nodesSets[i].cvLines.size(); j++)
 		{
-			auto result = minmax_element(nodesSets[i].cvLines.begin(), nodesSets[i].cvLines.end());
-			nodesSets[i].depots = getDepotsBetweenNodes(*result.first, *result.second);
+			std::cout << nodesSets[i].cvLines[j] << " ";
 		}
+		std::cout << "\n";
 
-		std::cout << "Numero de grupos: " << nodesSets.size() << "\n";
-		for (unsigned int i = 0; i < nodesSets.size(); i++)
+		std::cout << "Depots: " << "=>";
+		for (unsigned int j = 0; j < nodesSets[i].depots.size(); j++)
 		{
-			std::cout << "Grupo: " << i << std::endl;
-
-			std::cout << "Targets: " << "=>";
-			for (unsigned int j = 0; j < nodesSets[i].cvLines.size(); j++)
-			{
-				std::cout << nodesSets[i].cvLines[j] << " ";
-			}
-			std::cout << "\n";
-
-			std::cout << "Depots: " << "=>";
-			for (unsigned int j = 0; j < nodesSets[i].depots.size(); j++)
-			{
-				std::cout << nodesSets[i].depots[j] << " ";
-			}
-			std::cout << "\n";
+			std::cout << nodesSets[i].depots[j] << " ";
 		}
-		std::vector<std::pair<int, double>> setOfAreas;
+		std::cout << "\n";
+	}
+	std::vector<std::pair<int, double>> setOfAreas;
 
-		setOfAreas = getSetsArea();
+	setOfAreas = getSetsArea();
 
-		std::vector<std::pair<int, double>> setOfRobots;
+	std::vector<std::pair<int, double>> setOfRobots;
 
-		for (int i = 0; i < input.getRobotNum(); i++)
-			setOfRobots.push_back(std::make_pair(i, input.getRobotProp(i)));
+	for (int i = 0; i < input.getRobotNum(); i++)
+		setOfRobots.push_back(std::make_pair(i, input.getRobotProp(i)));
 
-		// ordena o robôs do pior desempenho ao melhor, ou seja do maior prop(menor tempo de voo) para o maior
-		std::sort(setOfRobots.begin(), setOfRobots.end(), compFunctor2);
+	// ordena o robôs do pior desempenho ao melhor, ou seja do maior prop(menor tempo de voo) para o maior
+	std::sort(setOfRobots.begin(), setOfRobots.end(), compFunctor2);
 
-		for (unsigned int i = 0; i < setOfAreas.size(); i++)
+	for (unsigned int i = 0; i < setOfAreas.size(); i++)
+	{
+		int setID = setOfAreas[i].first;
+		int robotID = setOfRobots[i].first;
+
+		nodesSets[setID].robotID = robotID;
+
+		std::cout << "area id:" << setID << " robotID: " << robotID << " prop: " << setOfRobots[i].second << " area: " << setOfAreas[i].second << std::endl;
+	}
+}
+
+std::vector<Graph::Set> Graph::splitHGraph()
+{
+
+	assert(graph.size() > 0);
+	assert(input.getRobotNum() > 0);
+	assert(input.getNodesNum() > 0);
+
+	// =========================================================
+	// CONFIG
+	// =========================================================
+
+	int nRobots = input.getRobotNum();
+	int MAX_ITER = 100;
+	int MAX_ELITE = 6;
+	double ALPHA_DIST = 0.3;
+
+	std::mt19937 rng(std::random_device{}());
+
+	std::vector<Set> bestSolution;
+
+	// =========================================================
+	// 1) COVERAGE LINES
+	// =========================================================
+
+	std::vector<std::pair<int, double>> cvLength;
+	double totalLength = 0.0;
+
+	for (int idx : graphTargetsIndexes)
+	{
+		assert(idx >= 0 && idx < graph.size());
+		assert(idx + 1 >= 0 && idx + 1 < graph.size());
+		assert(graph[idx].size() > idx + 1);
+		if (idx % 2 == 1 && idx + 1 < graph.size())
 		{
-			int setID = setOfAreas[i].first;
-			int robotID = setOfRobots[i].first;
+			double length = graph[idx][idx + 1];
 
-			nodesSets[setID].robotID = robotID;
-
-			std::cout << "area id:" << setID << " robotID: " << robotID << " prop: " << setOfRobots[i].second << " area: " << setOfAreas[i].second << std::endl;
+			cvLength.push_back({idx, length});
+			totalLength += length;
 		}
 	}
-	void Graph::splitHGraph()
+
+	int nLines = cvLength.size();
+
+	if (nLines == 0)
+		return {};
+
+	// =========================================================
+	// 2) TARGET
+	// =========================================================
+
+	std::vector<double> target(nRobots, 0.0);
+	double totalFuel = 0.0;
+
+	for (int r = 0; r < nRobots; r++)
+		totalFuel += input.getRobotFuel(r);
+
+	if (totalFuel == 0)
+		return {};
+
+	for (int r = 0; r < nRobots; r++)
+		target[r] =
+			(input.getRobotFuel(r) / totalFuel) * totalLength;
+
+	// =========================================================
+	// LENGTH MAP
+	// =========================================================
+
+	std::unordered_map<int, double> lengthMap;
+
+	for (auto &p : cvLength)
+		lengthMap[p.first] = p.second;
+
+	// =========================================================
+	// EVALUATE
+	// =========================================================
+
+	auto evaluateSolution =
+		[&](const std::vector<Set> &sol)
+	{
+		double cost = 0;
+
+		for (int r = 0; r < nRobots; r++)
+		{
+			double diff =
+				sol[r].length - target[r];
+
+			cost += diff * diff;
+		}
+
+		return cost;
+	};
+
+	// =========================================================
+	// BUILD ASSIGNMENT
+	// =========================================================
+
+	auto buildAssignment =
+		[&](const std::vector<Set> &sol)
+	{
+		std::unordered_map<int, int> assign;
+
+		for (auto &s : sol)
+			for (int line : s.cvLines)
+				assign[line] = s.robotID;
+
+		return assign;
+	};
+
+	// =========================================================
+	// DIFFERENT LINES
+	// =========================================================
+
+	auto getDifferentLines =
+		[&](auto &A, auto &B)
+	{
+		std::vector<int> diff;
+
+		for (auto &[line, r] : A)
+		{
+			auto it = B.find(line);
+
+			if (it != B.end() && it->second != r)
+				diff.push_back(line);
+		}
+
+		return diff;
+	};
+
+	// =========================================================
+	// MOVE LINE
+	// =========================================================
+
+	auto moveLine =
+		[&](std::vector<Set> &sol,
+			int line,
+			int from,
+			int to)
+	{
+		if (from == to)
+			return;
+
+		double len = lengthMap[line];
+
+		auto &f = sol[from];
+		auto &t = sol[to];
+
+		auto it =
+			std::find(
+				f.cvLines.begin(),
+				f.cvLines.end(),
+				line);
+
+		if (it == f.cvLines.end())
+			return;
+
+		f.cvLines.erase(it);
+		f.length -= len;
+
+		t.cvLines.push_back(line);
+		t.length += len;
+	};
+
+	// =========================================================
+	// LOCAL SEARCH
+	// =========================================================
+
+	auto localSearch =
+		[&](std::vector<Set> &sol)
+	{
+		const int MAX_LOCAL_ITER = 100;
+
+		double currentCost =
+			evaluateSolution(sol);
+
+		for (int iter = 0; iter < MAX_LOCAL_ITER; iter++)
+		{
+			bool improved = false;
+
+			// =========================================
+			// 1) MOVE LINE
+			// =========================================
+
+			for (int i = 0; i < nRobots; i++)
+			{
+				for (int j = 0; j < nRobots; j++)
+				{
+					if (i == j)
+						continue;
+
+					auto linesI = sol[i].cvLines;
+
+					for (int line : linesI)
+					{
+						moveLine(sol, line, i, j);
+
+						double newCost =
+							evaluateSolution(sol);
+
+						if (newCost < currentCost)
+						{
+							currentCost = newCost;
+							improved = true;
+							break;
+						}
+						else
+						{
+							moveLine(sol, line, j, i);
+						}
+					}
+
+					if (improved)
+						break;
+				}
+
+				if (improved)
+					break;
+			}
+
+			if (improved)
+				continue;
+
+			// =========================================
+			// 2) SWAP LINE
+			// =========================================
+
+			for (int i = 0; i < nRobots; i++)
+			{
+				for (int j = i + 1; j < nRobots; j++)
+				{
+					auto linesI = sol[i].cvLines;
+					auto linesJ = sol[j].cvLines;
+
+					for (int lineA : linesI)
+					{
+						for (int lineB : linesJ)
+						{
+							double lenA = lengthMap[lineA];
+							double lenB = lengthMap[lineB];
+
+							// remove
+							moveLine(sol, lineA, i, j);
+							moveLine(sol, lineB, j, i);
+
+							double newCost =
+								evaluateSolution(sol);
+
+							if (newCost < currentCost)
+							{
+								currentCost = newCost;
+								improved = true;
+								break;
+							}
+
+							// revert
+							moveLine(sol, lineB, i, j);
+							moveLine(sol, lineA, j, i);
+						}
+
+						if (improved)
+							break;
+					}
+
+					if (improved)
+						break;
+				}
+
+				if (improved)
+					break;
+			}
+
+			if (!improved)
+				break;
+		}
+	};
+
+	// =========================================================
+	// PATH RELINKING
+	// =========================================================
+
+	auto pathRelinking =
+		[&](std::vector<Set> A,
+			std::vector<Set> B)
+	{
+		auto assignA = buildAssignment(A);
+		auto assignB = buildAssignment(B);
+
+		auto diff =
+			getDifferentLines(assignA, assignB);
+
+		while (!diff.empty())
+		{
+			double bestCost = 1e18;
+			int bestLine = -1;
+
+			for (int line : diff)
+			{
+				int rA = assignA[line];
+				int rB = assignB[line];
+
+				moveLine(A, line, rA, rB);
+
+				double cost =
+					evaluateSolution(A);
+
+				moveLine(A, line, rB, rA);
+
+				if (cost < bestCost)
+				{
+					bestCost = cost;
+					bestLine = line;
+				}
+			}
+
+			if (bestLine == -1)
+				break;
+
+			int rA = assignA[bestLine];
+			int rB = assignB[bestLine];
+
+			moveLine(A, bestLine, rA, rB);
+
+			assignA[bestLine] = rB;
+
+			diff =
+				getDifferentLines(assignA, assignB);
+		}
+
+		localSearch(A);
+
+		return A;
+	};
+
+	// =========================================================
+	// ELITE
+	// =========================================================
+
+	std::vector<std::vector<Set>> elite;
+
+	// =========================================================
+	// GRASP LOOP (BALANCED VERSION)
+	// =========================================================
+
+	for (int it = 0; it < MAX_ITER; it++)
+	{
+		std::vector<Set> sol(nRobots);
+
+		for (int r = 0; r < nRobots; r++)
+		{
+			sol[r].robotID = r;
+			sol[r].set_id = r;
+			sol[r].length = 0.0;
+		}
+
+		std::vector<double> assigned(nRobots, 0.0);
+
+		auto shuffled = cvLength;
+
+		std::shuffle(
+			shuffled.begin(),
+			shuffled.end(),
+			rng);
+
+		// =====================================================
+		// GRASP BUILD (BALANCED)
+		// =====================================================
+
+		for (auto &line : shuffled)
+		{
+			int newLine = line.first;
+			double len = line.second;
+
+			std::vector<std::pair<int, double>> candidates;
+
+			for (int r = 0; r < nRobots; r++)
+			{
+				// ------------------------------------------
+				// distância
+				// ------------------------------------------
+
+				double dist;
+
+				if (sol[r].cvLines.empty())
+				{
+					int base = input.getRobotBaseId(r);
+
+					assert(newLine >= 0 && newLine < graph.size());
+					assert(base >= 0 && base < graph.size());
+
+					dist = getDistanceBetweenLines(
+						r,
+						base,
+						newLine);
+				}
+				else
+				{
+					int last = sol[r].cvLines.back();
+
+					assert(newLine >= 0 && newLine < graph.size());
+					assert(last >= 0 && last < graph.size());
+
+					dist = getDistanceBetweenLines(
+						r,
+						last,
+						newLine);
+				}
+
+				// ------------------------------------------
+				// balanceamento
+				// ------------------------------------------
+
+				double newLength = assigned[r] + len;
+
+				double balanceCost =
+					fabs(newLength - target[r]);
+
+				// penaliza excesso
+				if (newLength > target[r])
+					balanceCost *= 1.5;
+
+				double balanceNorm = 0;
+				if (target[r] > 1e-9)
+					balanceNorm = balanceCost / target[r];
+				else
+					balanceNorm = balanceCost;
+
+				double distNorm = 0;
+				if (totalLength > 1e-9)
+					distNorm = dist / totalLength;
+				else
+					distNorm = dist;
+
+				// ------------------------------------------
+				// score final
+				// ------------------------------------------
+
+				double score =
+					balanceNorm +
+					ALPHA_DIST * distNorm;
+
+				candidates.push_back({r, score});
+			}
+
+			// ------------------------------------------
+			// ordenar candidatos
+			// ------------------------------------------
+
+			std::sort(
+				candidates.begin(),
+				candidates.end(),
+				[](auto &a, auto &b)
+				{
+					return a.second < b.second;
+				});
+
+			// ------------------------------------------
+			// RCL adaptativa
+			// ------------------------------------------
+
+			int RCL_SIZE = 2;
+
+			if (it > MAX_ITER / 2)
+				RCL_SIZE = 3;
+
+			RCL_SIZE =
+				std::min(RCL_SIZE,
+						 (int)candidates.size());
+
+			std::uniform_int_distribution<int>
+				pick(0, RCL_SIZE - 1);
+
+			int chosen =
+				candidates[pick(rng)].first;
+
+			// ------------------------------------------
+			// atribuição
+			// ------------------------------------------
+
+			sol[chosen].cvLines.push_back(newLine);
+			sol[chosen].length += len;
+			assigned[chosen] += len;
+		}
+
+		// =====================================================
+		// LOCAL SEARCH
+		// =====================================================
+
+		localSearch(sol);
+
+		// =====================================================
+		// PATH RELINKING
+		// =====================================================
+
+		if (!elite.empty())
+		{
+			std::uniform_int_distribution<int>
+				distElite(0, elite.size() - 1);
+
+			int idx = distElite(rng);
+
+			sol =
+				pathRelinking(
+					sol,
+					elite[idx]);
+		}
+
+		// =====================================================
+		// EVALUATE
+		// =====================================================
+
+		double solCost =
+			evaluateSolution(sol);
+
+		// =====================================================
+		// UPDATE ELITE
+		// =====================================================
+
+		elite.push_back(sol);
+
+		std::sort(
+			elite.begin(),
+			elite.end(),
+			[&](auto &A, auto &B)
+			{
+				return evaluateSolution(A) <
+					   evaluateSolution(B);
+			});
+
+		if (elite.size() > MAX_ELITE)
+			elite.pop_back();
+
+		// =====================================================
+		// BEST SOLUTION
+		// =====================================================
+
+		if (bestSolution.empty() ||
+			solCost <
+				evaluateSolution(bestSolution))
+		{
+			bestSolution = sol;
+		}
+	}
+
+	// =========================================================
+	// PRINT
+	// =========================================================
+
+	std::cout << "\n===== SPLIT RESULT =====\n";
+
+	for (auto &s : bestSolution)
+	{
+		std::cout
+			<< "Robot " << s.robotID
+			<< " | length: " << s.length
+			<< " | target: " << target[s.robotID]
+			<< " | deviation: "
+			<< fabs(
+				   s.length -
+				   target[s.robotID])
+			<< " | #lines: "
+			<< s.cvLines.size()
+			<< "\n";
+
+		std::cout << "   cvLines: ";
+
+		for (int l : s.cvLines)
+			std::cout << l << " ";
+
+		std::cout
+			<< "\n--------------------------------\n";
+	}
+
+	return bestSolution;
+}
+
+/*void Graph::splitHGraph()
+{
+	const double INF = std::numeric_limits<double>::infinity();
+
+	// ===============================
+	// 1️⃣ Gerar linhas de cobertura
+	// ===============================
+	std::vector<std::pair<int, double>> cvLength;
+
+	for (size_t i = 0; i + 1 < graphTargetsIndexes.size(); i += 2)
+	{
+		int t1 = graphTargetsIndexes[i];
+		int t2 = graphTargetsIndexes[i + 1];
+
+		// 🔥 IMPORTANTE: usar tamanho real da linha
+		double length = graph[t1][t2];
+
+		if (length < INF)
+			cvLength.push_back({t1, length});
+	}
+
+	// ordenar da maior para menor
+	std::sort(cvLength.begin(), cvLength.end(),
+			  [](const auto &a, const auto &b)
+			  {
+				  return a.second > b.second;
+			  });
+
+	int nRobots = input.getRobotNum();
+
+	// ===============================
+	// 2️⃣ Inicializar nodesSets
+	// ===============================
+	nodesSets.clear();
+	nodesSets.resize(nRobots);
+
+	for (int r = 0; r < nRobots; ++r)
+	{
+		nodesSets[r].robotID = r;
+		nodesSets[r].length = 0.0;
+		nodesSets[r].cvLines.clear();
+		nodesSets[r].set_id = r; // 🔥 ESSENCIAL
+	}
+
+	// ===============================
+	// 3️⃣ Performance dos robôs
+	// ===============================
+	std::vector<double> robotPerformance(nRobots);
+	double totalPerf = 0.0;
+
+	for (int r = 0; r < nRobots; ++r)
+	{
+		robotPerformance[r] =
+			input.getRobotFuel(r) * input.getRobotVel(r);
+
+		totalPerf += robotPerformance[r];
+	}
+
+	// ===============================
+	// 4️⃣ Target proporcional
+	// ===============================
+	double totalLength = 0.0;
+	for (auto &l : cvLength)
+		totalLength += l.second;
+
+	std::vector<double> target(nRobots, 0.0);
+
+	for (int r = 0; r < nRobots; ++r)
+		target[r] = totalLength * (robotPerformance[r] / totalPerf);
+
+	// ===============================
+	// 5️⃣ Ordenar robôs por performance
+	// ===============================
+	std::vector<int> robotOrder(nRobots);
+	for (int r = 0; r < nRobots; ++r)
+		robotOrder[r] = r;
+
+	std::sort(robotOrder.begin(), robotOrder.end(),
+			  [&](int a, int b)
+			  {
+				  return robotPerformance[a] > robotPerformance[b];
+			  });
+
+	// ===============================
+	// 6️⃣ SEED (maiores linhas → melhores robôs)
+	// ===============================
+	std::vector<double> assignedSum(nRobots, 0.0);
+	std::unordered_set<int> usedLines;
+
+
+	int k = 0;
+	for (; k < nRobots && k < (int)cvLength.size(); ++k)
+	{
+		int r = robotOrder[k];
+
+		nodesSets[r].cvLines.push_back(cvLength[k].first);
+		nodesSets[r].length += cvLength[k].second;
+
+		assignedSum[r] += cvLength[k].second;
+		usedLines.insert(cvLength[k].first);
+	}
+
+	// 🔴 REMOVER TODAS AS LINHAS DO SEED
+	cvLength.erase(cvLength.begin(), cvLength.begin() + k);
+
+	// ===============================
+	// 7️⃣ EXPANSÃO PRINCIPAL
+	// ===============================
+	double w1 = 1.0;  // balanceamento
+	double w2 = 2.0;  // target
+	double w3 = 0.5;  // proximidade
+
+
+	while (!cvLength.empty())
+{
+	auto bestGlobalIt = cvLength.end();
+	int bestRobot = -1;
+	double bestScore = INF;
+
+	for (int r = 0; r < nRobots; ++r)
+	{
+		if (nodesSets[r].cvLines.empty())
+			continue;
+
+		int lastLine = nodesSets[r].cvLines.back();
+
+		for (auto it = cvLength.begin(); it != cvLength.end(); ++it)
+		{
+			int candidate = it->first;
+			double lineLength = it->second;
+
+			if(usedLines.find(candidate) != usedLines.end())
+				continue;
+
+			if(candidate == lastLine)
+				continue;
+
+			double dist = getDistanceBetweenLines(r, lastLine, candidate);
+			if (dist >= INF)
+				continue;
+
+			double ratio = assignedSum[r] / robotPerformance[r];
+
+			double progress = (assignedSum[r] + lineLength) / target[r];
+
+			// penalização não linear (importante)
+			double balanceCost = progress * progress;
+
+			double normDist = dist / totalLength;
+			double score = balanceCost + 0.1 * normDist; // 🔥 PESO DA PROXIMIDAD	E
+
+			if (score < bestScore)
+			{
+				bestScore = score;
+				bestGlobalIt = it;
+				bestRobot = r;
+			}
+		}
+	}
+
+	// ===============================
+	// ✔️ ATRIBUIÇÃO ÚNICA
+	// ===============================
+	if (bestGlobalIt != cvLength.end())
+	{
+		nodesSets[bestRobot].cvLines.push_back(bestGlobalIt->first);
+		nodesSets[bestRobot].length += bestGlobalIt->second;
+
+		assignedSum[bestRobot] += bestGlobalIt->second;
+		usedLines.insert(bestGlobalIt->first);
+
+		if (usedLines.count(bestGlobalIt->first))
+		{
+			cvLength.erase(bestGlobalIt);
+			continue;
+		}
+		cvLength.erase(bestGlobalIt);
+	}
+	else
+	{
+		// fallback
+		auto it = cvLength.begin();
+
+		while (it != cvLength.end() && usedLines.count(it->first))
+		{	it = cvLength.erase(it); }
+
+		if (it == cvLength.end())
+			break;
+
+		int fallbackRobot = 0;
+		double bestRatio = INF;
+
+		for (int r = 0; r < nRobots; ++r)
+		{
+			double ratio = assignedSum[r] / robotPerformance[r];
+
+			if (ratio < bestRatio)
+			{
+				bestRatio = ratio;
+				fallbackRobot = r;
+			}
+		}
+
+		nodesSets[fallbackRobot].cvLines.push_back(it->first);
+		nodesSets[fallbackRobot].length += it->second;
+
+		assignedSum[fallbackRobot] += it->second;
+
+		cvLength.erase(it);
+	}
+}
+// ===============================
+// 🔍 DEBUG FINAL
+// ===============================
+std::cout << "\n===== SPLIT RESULT =====\n";
+for (auto &ns : nodesSets)
+{
+	std::cout << "Robot " << ns.robotID
+			  << " | set_id: " << ns.set_id
+			  << " | length: " << ns.length
+			  << " | target: " << target[ns.robotID]
+			  << " | #lines: " << ns.cvLines.size()
+			  << "\n";
+
+	std::cout << "   cvLines: ";
+
+	for (auto &cv : ns.cvLines)
+	{
+		std::cout << cv << " ";
+	}
+
+	std::cout << "\n--------------------------------\n";
+}
+
+}*/
+
+/*void Graph::splitHGraph()
+{
+	const double INF = std::numeric_limits<double>::infinity();
+	int set_id = 0;
+
+	std::vector<std::pair<int, double>> cvLength;
+
+	cvLength.clear();
+
+	 //  GERAÇÃO ÚNICA DAS LINHAS
+	for (size_t i = 0; i + 1 < graphTargetsIndexes.size(); i += 2)
+	{
+		int t1 = graphTargetsIndexes[i];
+		int t2 = graphTargetsIndexes[i + 1];
+
+		double length = getFeasibleDistance(-1, t1, t2);
+
+		if (length < INF)
+			cvLength.push_back({t1, length});
+	}
+
+	// Ordenar linhas por tamanho (maiores primeiro)
+	std::sort(cvLength.begin(), cvLength.end(),
+			  [](const std::pair<int, double> &a,
+				 const std::pair<int, double> &b)
+			  {
+				  return a.second > b.second;
+			  });
+
+	// Reset dos grupos
+	nodesSets.clear();
+
+	// Criar um grupo por robô
+	for (int r = 0; r < input.getRobotNum(); r++)
+	{
+		Set ns;
+
+		ns.robotID = r;
+		ns.length = 0.0;
+		ns.cvLines.clear();
+
+		ns.set_id = set_id++;
+
+		nodesSets.push_back(ns);
+	}
+
+	input.maxFuelCost.resize(nodesSets.size());
+	input.constM.resize(nodesSets.size());
+
+	// SEED: uma linha inicial por robô
+	for (auto &ns : nodesSets)
+	{
+		if (cvLength.empty())
+			break;
+
+		auto bestIt = cvLength.end();
+
+		double bestCost = INF;
+
+		for (auto it = cvLength.begin(); it != cvLength.end(); ++it)
+		{
+			double cost = it->second;
+
+			std::cout << "Robot " << ns.robotID
+			<< " | capacity: " << robotRemainingCapacity[ns.robotID]
+			<< " | cost: " << cost << std::endl;
+
+			if (cost <= robotRemainingCapacity[ns.robotID] && cost < bestCost)
+			{
+				bestCost = cost;
+				bestIt = it;
+			}
+		}
+
+	// fallback
+		if (bestIt == cvLength.end())
+		{
+			bestIt = std::min_element(cvLength.begin(), cvLength.end(),
+			[](const auto &a, const auto &b)
+				{
+					return a.second < b.second;
+				});
+		}
+
+		// proteção
+	double assignedCost = bestIt->second;
+
+	ns.cvLines.push_back(bestIt->first);
+	ns.length += assignedCost;
+
+	robotRemainingCapacity[ns.robotID] =
+	std::max(0.0, robotRemainingCapacity[ns.robotID] - assignedCost);
+
+	cvLength.erase(bestIt);
+	}
+
+
+	// EXPANSÃO PRINCIPAL
+	while (!cvLength.empty())
+	{
+		bool assigned = false;
+
+		for (auto &ns : nodesSets)
+
+		{
+			if (robotRemainingCapacity[ns.robotID] <= 0)
+				continue;
+
+			if (ns.cvLines.empty())
+				continue;
+
+			int lastLine = ns.cvLines.back();
+
+			int bestLine = -1;
+			double bestDist = INF;
+			auto bestIt = cvLength.end();
+
+			for (auto it = cvLength.begin(); it != cvLength.end(); ++it)
+			{
+				int candidate = it->first;
+				double lineLength = it->second;
+
+				double dist = getDistanceBetweenLines(
+					ns.robotID, lastLine, candidate);
+
+				if (dist >= INF)
+					continue; // bloqueado por obstáculo
+
+				double totalCost = dist + lineLength;
+
+				if (totalCost <= robotRemainingCapacity[ns.robotID] &&
+					dist < bestDist)
+				{
+					bestDist = dist;
+					bestLine = candidate;
+					bestIt = it;
+				}
+			}
+
+			// encontrou linha viável
+			if (bestLine != -1)
+			{
+				ns.cvLines.push_back(bestLine);
+
+				ns.length += bestIt->second + bestDist;
+
+				robotRemainingCapacity[ns.robotID] -=
+					(bestIt->second + bestDist);
+
+				cvLength.erase(bestIt);
+
+				assigned = true;
+			}
+		}
+
+		// FALLBACK (garante progresso)
+		if (!assigned)
+		{
+			auto it = cvLength.begin();
+
+			// escolhe robô com maior capacidade restante
+			auto bestCluster = std::max_element(
+				nodesSets.begin(), nodesSets.end(),
+				[&](const Set &a, const Set &b)
+				{
+					return robotRemainingCapacity[a.robotID] <
+						   robotRemainingCapacity[b.robotID];
+				});
+
+			bestCluster->cvLines.push_back(it->first);
+			bestCluster->length += it->second;
+
+			robotRemainingCapacity[bestCluster->robotID] -= it->second;
+
+			cvLength.erase(it);
+		}
+	}
+
+	// 🔍 Verificação final (debug)
+	for (auto &ns : nodesSets)
+	{
+		if (ns.cvLines.empty())
+		{
+			std::cout << "WARNING: robot "
+					  << ns.robotID
+					  << " sem linhas atribuídas\n";
+		}
+	}
+}*/
+
+/*void Graph::splitHGraph()
 	{
 
 		// Declaring a set that will store the pairs using above comparison
@@ -270,6 +1356,8 @@
 
 		std::vector<std::pair<int, double>> cvLength;
 
+		const double INF = std::numeric_limits<double>::infinity();
+
 		// indices dos nós
 		std::vector<int> index;
 
@@ -277,7 +1365,7 @@
 		// Não consideramos o deslocamento para a linha
 
 		// targets on graph
-		int t1, t2 = 0;
+		int t1{0}, t2{0};
 		for (uint i = 0; i < graphTargetsIndexes.size(); i = i + 2)
 		{
 			t1 = graphTargetsIndexes[i];
@@ -418,8 +1506,12 @@
 					{
 						// verificar se última se a linha restante pode ser anexada ao grupo, dado a capacidade do robô
 						int id_cl_on_ns = (*itNodeSet).cvLines.back();
-						double dist = graph[id_cl_on_ns][(*itLength).first];
-						double max_dist_robot = input.getRobotFuel((*bestRobot).first) * input.getRobotVel(((*bestRobot).first));
+						//double dist = graph[id_cl_on_ns][(*itLength).first];
+						double dist = getDistanceBetweenLines((*bestRobot).first, id_cl_on_ns, (*itLength).first);
+						if (dist >= INF)
+							continue; // não conecta
+
+							double max_dist_robot = input.getRobotFuel((*bestRobot).first) * input.getRobotVel(((*bestRobot).first));
 
 						// inserir ao robô se for viável
 						if (dist < max_dist_robot)
@@ -636,7 +1728,8 @@
 						// possa ser atribuída a ele.
 						if ((*itRobot).second > 0)
 						{
-							cvIndex = (*itNodes).cvLines.front();
+							//cvIndex = (*itNodes).cvLines.front();
+							cvIndex = (*itNodes).cvLines.back();
 							mapOfLines.clear();
 
 							// obter as distâncias dos nós i e i+1 da linha do grupo  em relação às demais linhas
@@ -644,21 +1737,19 @@
 							{
 
 								int nextCv = (*j).first;
-								double value = (graph[cvIndex][nextCv] + graph[cvIndex + 1][nextCv + 1]);
+								//double value = (graph[cvIndex][nextCv] + graph[cvIndex + 1][nextCv + 1]);
+								double value = getDistanceBetweenLines(robotID, cvIndex, nextCv);
+								if(value >= INF)
+									continue; // não conecta
 
 								// build a map of lines
 								mapOfLines.insert(std::pair<int, double>(nextCv, value));
 							}
 
-							// criar o conjunto ordenado (crescente) das distâncias entre a linha
-							/*set<pair<int,double>,Comparator> setOfLines(
-								mapOfLines.begin(), mapOfLines.end(), compFunctor);
+							if(mapOfLines.empty())
+								continue;
 
-						//verificar a partir da mais próxima, qual linha pode ser atribuída ao robô
-						for(set<pair<int,double>, Comparator>::iterator it=setOfLines.begin();
-								it!= setOfLines.end();++it){
-							 */
-
+							//ordenar as linhas em relação a distância da linha do grupo
 							std::vector<std::pair<int, double>> setOfLines;
 							setOfLines.insert(setOfLines.begin(), mapOfLines.begin(), mapOfLines.end());
 							std::sort(setOfLines.begin(), setOfLines.end(), compFunctor);
@@ -726,796 +1817,1275 @@
 
 		for (Node n : nodesX)
 			link_nid_to_ninfo.emplace(n.nodeId, n);
+	}*/
+
+/*void Graph::splitHGraph()
+{
+
+	// Declaring a set that will store the pairs using above comparison
+	// set<pair<int, double>,Comparator> setOfLines;
+	std::map<int, double> mapOfLines;
+
+	std::vector<Set> teste;
+
+	double cvLinesSum = 0;
+	double length = 0;
+
+	std::vector<std::pair<int, double>> cvLength;
+
+	// indices dos nós
+	std::vector<int> index;
+
+	// calcular a distância total ao percorrer todas as linhas de cobertura.
+	// Não consideramos o deslocamento para a linha
+
+	// targets on graph
+	int t1, t2 = 0;
+	for (uint i = 0; i < graphTargetsIndexes.size(); i = i + 2)
+	{
+		t1 = graphTargetsIndexes[i];
+
+		// se o t1 for o últino target não é possível constituir uma linha de cobertura
+		if (t1 < graphTargetsIndexes.back())
+			t2 = graphTargetsIndexes[i + 1];
+		else
+			break;
+
+		// create vector of all targets indices
+		index.push_back(t1);
+
+		// obter o tamanho da linha
+		double length = (graph[t1][t2]);
+
+		// somatório dos tamanhos das linhas de coberturas.
+		cvLinesSum += length;
 	}
 
-	// encontrado o nodeset, dividí-lo
-	void Graph::SplitSubGraph()
+	// inicializa um vetor com o pair do índice do robô e a sua proporção
+	std::vector<std::pair<int, double>> setOfRobots;
+
+	// insere o indice e a proporção do robô
+	for (int i = 0; i < input.getRobotNum(); i++)
+		setOfRobots.push_back(std::make_pair(i, input.getRobotProp(i)));
+
+	// ordena o robôs do pior  desempenho ao melhor, ou seja do maior prop(menor tempo de voo) para o maior
+	std::sort(setOfRobots.begin(), setOfRobots.end(), compFunctor);
+
+	// vetor com o desempenho de cobertura dos robôs relacioados ao melhor robô (menor prop)
+	std::vector<std::pair<int, double>> robotsCVPerformance;
+
+	// vetor com o desempenho dos robôs relacioados ao melhor robô (menor prop)
+	std::vector<std::pair<int, double>> robotsPropPerformance;
+
+	// obter a melhor performance
+	double bestPropPerformance = (*setOfRobots.begin()).second;
+
+	int robotID = 0;
+	int set_id = 0;
+	double prop = 0;
+	double propSum = 0;
+
+	// obter a relação da performance do melhor robô em relação a todos os robôs
+	for (uint i = 0; i < setOfRobots.size(); i++)
 	{
-		float total_coverage_lines_num;
-		float group_coverage_lines_num;
+		robotID = setOfRobots[i].first;
+		prop = (1 / (setOfRobots[i].second / bestPropPerformance));
+		robotsPropPerformance.push_back(std::make_pair(robotID, prop));
+		propSum += prop;
+	}
 
-		float groups_num;
-		int max_coverage_lines_num = cvl_subset_num;
-		int groups_max_cl_num;
-		int groups_min_cl_num;
-		int resto;
-		int vMax;
-		int vMin;
-		int split;
-		std::map<int, double> mapOfLines;
-		std::vector<int> ordered_index;
-		std::vector<int> sub_set_size;
+	// calcula a distância que o melhor robô deverá percorrer das linhas de cobertura
+	double totalCVLenghtBestRobot = cvLinesSum / propSum;
+	double totalCVLenghtRobot = 0;
 
-		if (max_coverage_lines_num > 1)
+	// calcula a distância que cada robô percorrerá das linha de cobertura
+	for (unsigned int i = 0; i < robotsPropPerformance.size(); i++)
+	{
+		totalCVLenghtRobot = totalCVLenghtBestRobot * robotsPropPerformance[i].second;
+		robotID = robotsPropPerformance[i].first;
+		robotsCVPerformance.push_back(std::make_pair(robotID, totalCVLenghtRobot));
+	}
+
+	std::vector<std::pair<int, double>>::iterator itRobots = robotsCVPerformance.begin();
+	std::vector<int>::iterator itIndex = index.begin();
+
+	// inserir a linha e o seu tamanho no vetor
+	for (int i : index)
+	{
+		double length = (graph[i][i + 1]);
+		cvLength.push_back(std::make_pair(i, length));
+	}
+
+	// verificar se as linhas são congruentes
+	std::pair<std::vector<std::pair<int, double>>::iterator, std::vector<std::pair<int, double>>::iterator> bounds;
+
+	bounds = std::equal_range(cvLength.begin(), cvLength.end(), cvLength.front(), [](const std::pair<int, double> &p1, const std::pair<int, double> &p2)
+							   { return p1.second < p2.second; });
+
+	// se todas as linha forem congruentes
+	if (cvLength.size() == uint(bounds.second - cvLength.begin()))
+	{
+		while (!cvLength.empty())
 		{
 
-			int nodes_set_id = 0;
-			auto it_ns = nodesSets.begin();
-			while (it_ns != nodesSets.end())
+			// apontar para o vetor de tamanhos das linhas de cobertura
+			std::vector<std::pair<int, double>>::iterator itLength = cvLength.begin();
+
+			// iniciar bestCapacity com um número pequeno. Esta variável armazenará a melhor capacidade disponível para a frota.
+			double bestCapacity = std::numeric_limits<double>::min();
+
+			// iterator para encontrar o robô com melhor capacidade disponível
+			std::vector<std::pair<int, double>>::iterator bestRobot;
+
+			// entre todos os robô verificar qual possui melhor capacidade
+			for (std::vector<std::pair<int, double>>::iterator itR = robotsCVPerformance.begin(); itR != robotsCVPerformance.end(); ++itR)
 			{
 
-				total_coverage_lines_num = it_ns->cvLines.size();
-				groups_num = ceil(total_coverage_lines_num / max_coverage_lines_num);
-				group_coverage_lines_num = total_coverage_lines_num / groups_num;
-
-				vMax = ceil(group_coverage_lines_num);
-				vMin = floor(group_coverage_lines_num);
-
-				groups_max_cl_num = total_coverage_lines_num - (vMin * groups_num);
-
-				resto = total_coverage_lines_num - (groups_max_cl_num * vMax);
-				groups_min_cl_num = resto / vMin;
-
-				sub_set_size.clear();
-				for (int i = 0; i < groups_max_cl_num; i++)
-					sub_set_size.push_back(vMax);
-
-				for (int i = 0; i < groups_min_cl_num; i++)
-					sub_set_size.push_back(vMin);
-
-				std::cout << "divisão de nodeSet: " << nodes_set_id++ << std::endl;
-				for (int i : sub_set_size)
-					std::cout << " " << i;
-				std::cout << std::endl;
-
-				if (sub_set_size.size() > 1)
+				if (bestCapacity < (*itR).second)
 				{
-					// indices dos nós
-					std::vector<int> v_ids;
+					bestRobot = itR;
+					bestCapacity = (*itR).second;
+				}
+			}
 
-					// create vector of all targets indices
-					v_ids = it_ns->cvLines;
+			// encontrada a maior capacidade disponível, verificar se o robô pode sobrevoar a maior linha de cvLength.
+			// caso não haja capacidade disponível, alocá-la ao melhor robô.
+			if (bestCapacity < (*itLength).second)
+			{
 
-					it_ns->sub_set.clear();
+				// procurar a posição do nodesSet que contenha o ID do robô que irá recebê-la
+				std::vector<Set>::iterator itNodeSet;
+				for (std::vector<Set>::iterator itSet = nodesSets.begin(); itSet != nodesSets.end(); ++itSet)
+				{
+					if ((*bestRobot).first == (*itSet).robotID)
+					{
+						itNodeSet = itSet;
+						break;
+					}
+				}
 
-					// first sub_set index on vector
-					auto i = v_ids.begin();
+				// se o robô ainda não recebeu nenhuma CV, criar um conjunto vazio e inserir as informações no final
+				if (itNodeSet == nodesSets.end())
+				{
+					nodesSets.push_back(Set());
+					// inserir as informações no nodesSet
+					nodesSets.back().cvLines.push_back((*itLength).first);
+					nodesSets.back().robotID = (*bestRobot).first;
+					nodesSets.back().length += (*itLength).second;
 
-					// agrupar todas as linhas
-					while (!v_ids.empty())
+					// inserir o índice do grupo
+					nodesSets.back().set_id = set_id++;
+				}
+				// caso o grupo já tenha recebido alguma linha
+				else
+				{
+					// verificar se última se a linha restante pode ser anexada ao grupo, dado a capacidade do robô
+					int id_cl_on_ns = (*itNodeSet).cvLines.back();
+					double dist = graph[id_cl_on_ns][(*itLength).first];
+					double max_dist_robot = input.getRobotFuel((*bestRobot).first) * input.getRobotVel(((*bestRobot).first));
+
+					// inserir ao robô se for viável
+					if (dist < max_dist_robot)
+					{
+						// inserir as informações no nodesSet
+						(*itNodeSet).cvLines.push_back((*itLength).first);
+						(*itNodeSet).robotID = (*bestRobot).first;
+						(*itNodeSet).length += (*itLength).second;
+						// diminuir a capacidade do robô
+					}
+					// caso contrário inserir no grupo que possui a linha mais próxima
+
+					else
+					{
+						nodesSets.back().cvLines.push_back((*itLength).first);
+						nodesSets.back().length += (*itLength).second;
+						// apontar o bestRobot para o robô do último grupo para que seja possível reduzir a sua capacidade
+						for (std::vector<std::pair<int, double>>::iterator itR = robotsCVPerformance.begin(); itR != robotsCVPerformance.end(); ++itR)
+						{
+							if (itR->first == nodesSets.back().robotID)
+							{
+								bestRobot = itR;
+								break;
+							}
+						}
+					}
+				}
+				(*bestRobot).second = (*bestRobot).second - (*itLength).second;
+				// a linha é removida do vetor.
+				cvLength.erase(itLength);
+				continue;
+			}
+
+			// Se os robôs não receberam linhas de cobertura. Inserir a sequencia de linhas
+			if (nodesSets.size() < robotsCVPerformance.size())
+			{
+				// Para cada robô disponível, inserir a maior linha de acordo com a sua capacidade
+				for (std::vector<std::pair<int, double>>::iterator itR = robotsCVPerformance.begin(); itR != robotsCVPerformance.end(); ++itR)
+				{
+
+					// se a capacidade do robô está esgotada, pegar o próximo robô
+					if ((*itR).second < 0)
+						continue;
+
+					// insertir um conjunto vazio
+					nodesSets.push_back(Set());
+					nodesSets.back().robotID = (*itR).first;
+					nodesSets.back().set_id = set_id++;
+
+					auto itLength = cvLength.begin();
+					// para cada linha a ser cobertura, começando pela maior linha cv
+					while (itLength != cvLength.end())
 					{
 
-						// i é um iterator para o v_id
-						i = v_ids.begin();
+						// se a capacidade do robô for suficiente para a linha cv
+						if ((*itR).second >= (*itLength).second)
+						{
+							// inseria o índice da linha, id do robot e o tamanho da linha
+							nodesSets.back().cvLines.push_back((*itLength).first);
+							nodesSets.back().length += (*itLength).second;
+							// diminuir a capacidade do robô no vetor
+							(*itR).second = (*itR).second - (*itLength).second;
+							itLength = cvLength.erase(itLength);
+						}
+						else
+							break;
+					}
+				}
+			}
+		}
+	}
 
-						// obter a quantidad de linhas do sub grupo
-						split = sub_set_size.back();
-						// remover a quantidade de linhas do sub grupo do vetor
-						sub_set_size.pop_back();
+	else
+	{ // se as linhas forem diferentes, ordenar as linhas em relação a extensão e alocar as k primeiras linhas para os k vants,
+		// posteriormeter alocar de acordo com a distância entre a linha atribuída ao grupo.
+		// ordenar da maior linha à menor
+		std::sort(cvLength.begin(), cvLength.end(), [](const std::pair<int, double> &p1, const std::pair<int, double> &p2)
+			 {
+		if(isDefinitelyGreaterThan(p1.second,p2.second,1.0))
+			return true;
+		else if(isApproximatelyEqual(p1.second,p2.second))
+			return p1.first < p2.first;
+		return false; });
 
-						// obter as distâncias dos nós i e i+1 da linha de referência  em relação aos demais nós.
-						mapOfLines.insert(std::pair<int, double>(*i, 0));
-						for (std::vector<int>::iterator j = v_ids.begin() + 1; j != v_ids.end(); ++j)
+		// alocar  todas as linhas para os robôs
+		while (!cvLength.empty())
+		{
+
+			// apontar para o vetor de tamanhos das linhas de cobertura
+			std::vector<std::pair<int, double>>::iterator itLength = cvLength.begin();
+
+			// iniciar bestCapacity com um número pequeno. Esta variável armazenará a melhor capacidade disponível para a frota.
+			double bestCapacity = std::numeric_limits<double>::min();
+
+			// iterator para encontrar o robô com melhor capacidade disponível
+			std::vector<std::pair<int, double>>::iterator bestRobot;
+
+			// entre todos os robô verificar qual possui melhor capacidade
+			for (std::vector<std::pair<int, double>>::iterator itR = robotsCVPerformance.begin(); itR != robotsCVPerformance.end(); ++itR)
+			{
+
+				if (bestCapacity < (*itR).second)
+				{
+					bestRobot = itR;
+					bestCapacity = (*itR).second;
+				}
+			}
+			// encontrada a maior capacidade disponível, verificar se o robô pode sobrevoar a maior linha de cvLength.
+			// caso não haja capacidade disponível, alocá-la ao melhor robô.
+			if (bestCapacity < (*itLength).second)
+			{
+
+				// procurar a posição do nodesSet que contenha o ID do robô que irá recebê-la
+				std::vector<Set>::iterator itNodeSet;
+				for (std::vector<Set>::iterator itSet = nodesSets.begin(); itSet != nodesSets.end(); ++itSet)
+				{
+					if ((*bestRobot).first == (*itSet).robotID)
+					{
+						itNodeSet = itSet;
+						break;
+					}
+				}
+				// se o robô ainda não recebeu nenhuma CV, criar um conjunto vazio e inserir as informações no final
+				if (itNodeSet == nodesSets.end())
+				{
+					nodesSets.push_back(Set());
+					// inserir as informações no nodesSet
+					nodesSets.back().cvLines.push_back((*itLength).first);
+					nodesSets.back().robotID = (*bestRobot).first;
+					nodesSets.back().length += (*itLength).second;
+
+					// inserir o índice do grupo
+					nodesSets.back().set_id = set_id++;
+				}
+				// caso o grupo já tenha recebido algum linha
+				else
+				{
+					// inserir as informações no nodesSet
+					(*itNodeSet).cvLines.push_back((*itLength).first);
+					(*itNodeSet).robotID = (*bestRobot).first;
+					(*itNodeSet).length += (*itLength).second;
+				}
+				// diminuir a capacidade do robô
+				(*bestRobot).second = (*bestRobot).second - (*itLength).second;
+
+				// a linha é removida do vetor.
+				cvLength.erase(itLength);
+				continue;
+			}
+
+			// Se os robôs não receberam linhas de cobertura. Inserir a maior linha possível
+			// para cada robô
+			if (nodesSets.size() < robotsCVPerformance.size())
+			{
+				// Para cada robô disponível, inserir a maior linha de acordo com a sua capacidade
+				for (std::vector<std::pair<int, double>>::iterator itR = robotsCVPerformance.begin(); itR != robotsCVPerformance.end(); ++itR)
+				{
+
+					// se a capacidade do robô está esgotada, pegar o próximo robô
+					if ((*itR).second < 0)
+						continue;
+
+					// para cada linha a ser cobertura, começando pela maior linha cv
+					for (std::vector<std::pair<int, double>>::iterator itLength = cvLength.begin(); itLength != cvLength.end(); itLength++)
+					{
+
+						// se a capacidade do robô for suficiente para a linha cv
+						if ((*itR).second >= (*itLength).second)
+						{
+							// insertir um conjunto vazio
+							nodesSets.push_back(Set());
+
+							// inseria o índice da linha, id do robot e o tamanho da linha
+							nodesSets.back().cvLines.push_back((*itLength).first);
+							nodesSets.back().robotID = (*itR).first;
+							nodesSets.back().length += (*itLength).second;
+							nodesSets.back().set_id = set_id++;
+							// diminuir a capacidade do robô no vetor
+							(*itR).second = (*itR).second - (*itLength).second;
+							cvLength.erase(itLength);
+							break;
+						}
+					}
+				}
+			}
+			// para cada linha inserida no nodesSet procurar a linha mais próxima que possar ser atribuída ao robô
+			else
+			{
+
+				int cvIndex = 0;
+
+				// para cada grupo, obter a linha inserida.
+				for (std::vector<Set>::iterator itNodes = nodesSets.begin(); itNodes != nodesSets.end(); ++itNodes)
+				{
+
+					// obter o id do robô do grupo
+					int robotID = (*itNodes).robotID;
+
+					// iterador para indicar qual é a performance do robô
+					std::vector<std::pair<int, double>>::iterator itRobot;
+
+					// encontrar a performance do robô alocado no grupo
+					for (std::vector<std::pair<int, double>>::iterator itR = robotsCVPerformance.begin(); itR != robotsCVPerformance.end(); ++itR)
+					{
+						// apontar para a performance do robô
+						if (robotID == (*itR).first)
+						{
+							itRobot = itR;
+							break;
+						}
+					}
+
+					// verificar se o robô possui capacidade suficiente para que outra linhas
+					// possa ser atribuída a ele.
+					if ((*itRobot).second > 0)
+					{
+						cvIndex = (*itNodes).cvLines.front();
+						mapOfLines.clear();
+
+						// obter as distâncias dos nós i e i+1 da linha do grupo  em relação às demais linhas
+						for (std::vector<std::pair<int, double>>::iterator j = cvLength.begin(); j != cvLength.end(); ++j)
 						{
 
-							double value = (graph[*i][*j] + graph[*i + 1][*j + 1]);
+							int nextCv = (*j).first;
+							double value = (graph[cvIndex][nextCv] + graph[cvIndex + 1][nextCv + 1]);
 
 							// build a map of lines
-							mapOfLines.insert(std::pair<int, double>(*j, value));
+							mapOfLines.insert(std::pair<int, double>(nextCv, value));
 						}
-						// criar o conjunto ordenado (crescente) das distâncias entre a linha representada
 
-						// pelo indice i
+						// criar o conjunto ordenado (crescente) das distâncias entre a linha
+						//set<pair<int,double>,Comparator> setOfLines(
+							//mapOfLines.begin(), mapOfLines.end(), compFunctor);
+
+					//verificar a partir da mais próxima, qual linha pode ser atribuída ao robô
+					for(set<pair<int,double>, Comparator>::iterator it=setOfLines.begin();
+							it!= setOfLines.end();++it){
+
 						std::vector<std::pair<int, double>> setOfLines;
 						setOfLines.insert(setOfLines.begin(), mapOfLines.begin(), mapOfLines.end());
 						std::sort(setOfLines.begin(), setOfLines.end(), compFunctor);
 
-						if (setOfLines.size() != mapOfLines.size())
-							std::cout << "problema subset" << std::endl;
-
-						ordered_index.clear();
-						for (std::pair<int, double> el : setOfLines)
-							ordered_index.emplace_back(el.first);
-
-						// inicializar um novo sub_set
-						it_ns->sub_set.push_back(sub_set_data());
-
-						// inserir a quantidade de índices no sub-grupo
-						auto end_id = ordered_index.begin();
-
-						// avançar o iterator para o split do vetor ordered
-						std::advance(end_id, split);
-
-						std::vector<int> temp = ordered_index;
-
-						try
+						// verificar a partir da mais próxima, qual linha pode ser atribuída ao robô
+						for (std::vector<std::pair<int, double>>::iterator it = setOfLines.begin();
+							 it != setOfLines.end(); ++it)
 						{
-							temp.resize(split);
-							temp.shrink_to_fit();
-							it_ns->sub_set.back().cvLines = temp;
-							it_ns->sub_set.back().depots = it_ns->depots;
-							// remover de index os índices inseridos no sub grupo
+
+							// calcular o tamanho da linha
+							length = graph[(*it).first][(*it).first + 1];
+
+							// se o tamanho da linha for menor ou igual  a capacidade do robô
+							if (length <= (*itRobot).second)
+							{
+								// adicionar o índice da linha ao grupo
+								(*itNodes).cvLines.push_back((*it).first);
+								(*itNodes).length += length;
+								// dim*vi+1inuir a capacidade do robô
+								(*itRobot).second = (*itRobot).second - length;
+
+								// atualizar o vetor de tamanhos de linhas de cobertura
+								for (std::vector<std::pair<int, double>>::iterator itLength = cvLength.begin(); itLength != cvLength.end(); ++itLength)
+								{
+									if ((*it).first == (*itLength).first)
+									{
+										cvLength.erase(itLength);
+										break;
+									}
+								}
+							}
+						}
+						setOfLines.clear();
+					}
+				}
+			}
+		}
+	}
+
+	std::cout << "Numero de grupos: " << nodesSets.size() << "\n";
+	for (unsigned int i = 0; i < nodesSets.size(); i++)
+	{
+		std::cout << "Grupo: " << i << std::endl;
+
+		std::cout << "Targets: " << "=>";
+		for (unsigned int j = 0; j < nodesSets[i].cvLines.size(); j++)
+		{
+			std::cout << nodesSets[i].cvLines[j] << " ";
+		}
+		std::cout << "\n";
+
+		std::cout << "Depots: " << "=>";
+		for (unsigned int j = 0; j < nodesSets[i].depots.size(); j++)
+		{
+			std::cout << nodesSets[i].depots[j] << " ";
+		}
+		std::cout << "\n";
+	}
+
+	// sort node ids considering the position
+	sortNodesX();
+
+	input.maxFuelCost.resize(nodesSets.size());
+	input.constM.resize(nodesSets.size());
+
+	for (Node n : nodesX)
+		link_nid_to_ninfo.emplace(n.nodeId, n);
+}*/
+
+// encontrado o nodeset, dividí-lo
+void Graph::SplitSubGraph()
+{
+	float total_coverage_lines_num;
+	float group_coverage_lines_num;
+
+	float groups_num;
+	int max_coverage_lines_num = cvl_subset_num;
+	int groups_max_cl_num;
+	int groups_min_cl_num;
+	int resto;
+	int vMax;
+	int vMin;
+	int split;
+	std::map<int, double> mapOfLines;
+	std::vector<int> ordered_index;
+	std::vector<int> sub_set_size;
+
+	if (max_coverage_lines_num > 1)
+	{
+
+		int nodes_set_id = 0;
+		auto it_ns = nodesSets.begin();
+		while (it_ns != nodesSets.end())
+		{
+
+			total_coverage_lines_num = it_ns->cvLines.size();
+			groups_num = ceil(total_coverage_lines_num / max_coverage_lines_num);
+			group_coverage_lines_num = total_coverage_lines_num / groups_num;
+
+			vMax = ceil(group_coverage_lines_num);
+			vMin = floor(group_coverage_lines_num);
+
+			groups_max_cl_num = total_coverage_lines_num - (vMin * groups_num);
+
+			resto = total_coverage_lines_num - (groups_max_cl_num * vMax);
+			groups_min_cl_num = resto / vMin;
+
+			sub_set_size.clear();
+			for (int i = 0; i < groups_max_cl_num; i++)
+				sub_set_size.push_back(vMax);
+
+			for (int i = 0; i < groups_min_cl_num; i++)
+				sub_set_size.push_back(vMin);
+
+			std::cout << "divisão de nodeSet: " << nodes_set_id++ << std::endl;
+			for (int i : sub_set_size)
+				std::cout << " " << i;
+			std::cout << std::endl;
+
+			if (sub_set_size.size() > 1)
+			{
+				// indices dos nós
+				std::vector<int> v_ids;
+
+				// create vector of all targets indices
+				v_ids = it_ns->cvLines;
+
+				it_ns->sub_set.clear();
+
+				// first sub_set index on vector
+				auto i = v_ids.begin();
+
+				// agrupar todas as linhas
+				while (!v_ids.empty())
+				{
+
+					// i é um iterator para o v_id
+					i = v_ids.begin();
+
+					// obter a quantidad de linhas do sub grupo
+					split = sub_set_size.back();
+					// remover a quantidade de linhas do sub grupo do vetor
+					sub_set_size.pop_back();
+
+					// obter as distâncias dos nós i e i+1 da linha de referência  em relação aos demais nós.
+					mapOfLines.insert(std::pair<int, double>(*i, 0));
+					for (std::vector<int>::iterator j = v_ids.begin() + 1; j != v_ids.end(); ++j)
+					{
+
+						double value = (graph[*i][*j] + graph[*i + 1][*j + 1]);
+
+						// build a map of lines
+						mapOfLines.insert(std::pair<int, double>(*j, value));
+					}
+					// criar o conjunto ordenado (crescente) das distâncias entre a linha representada
+
+					// pelo indice i
+					std::vector<std::pair<int, double>> setOfLines;
+					setOfLines.insert(setOfLines.begin(), mapOfLines.begin(), mapOfLines.end());
+					std::sort(setOfLines.begin(), setOfLines.end(), compFunctor);
+
+					if (setOfLines.size() != mapOfLines.size())
+						std::cout << "problema subset" << std::endl;
+
+					ordered_index.clear();
+					for (std::pair<int, double> el : setOfLines)
+						ordered_index.emplace_back(el.first);
+
+					// inicializar um novo sub_set
+					it_ns->sub_set.push_back(sub_set_data());
+
+					// inserir a quantidade de índices no sub-grupo
+					auto end_id = ordered_index.begin();
+
+					// avançar o iterator para o split do vetor ordered
+					std::advance(end_id, split);
+
+					std::vector<int> temp = ordered_index;
+
+					try
+					{
+						temp.resize(split);
+						temp.shrink_to_fit();
+						it_ns->sub_set.back().cvLines = temp;
+						it_ns->sub_set.back().depots = it_ns->depots;
+						// remover de index os índices inseridos no sub grupo
+						ordered_index.erase(ordered_index.begin(), end_id);
+					}
+					catch (const std::exception &x)
+					{
+						std::cerr << "Problem  on Subset  update!!" << '\n';
+					}
+
+					v_ids = ordered_index;
+
+					mapOfLines.clear();
+				}
+			}
+			++it_ns;
+		}
+	}
+}
+
+// função para atualizar o subset de um nodeset particular.
+// é necessário recalcular a quantidade de linhas, visto que as funções de vizinhança podem alterar a quantidade de linhas do nodeset (shift e swap)
+void Graph::UpdateSubSet(int nodeset)
+{
+
+	float total_coverage_lines_num;
+	float group_coverage_lines_num;
+
+	float groups_num;
+	int max_coverage_lines_num = cvl_subset_num;
+	int groups_max_cl_num;
+	int groups_min_cl_num;
+	int resto;
+	int vMax;
+	int vMin;
+	int split;
+	std::map<int, double> mapOfLines;
+	std::vector<int> sub_set_size;
+	std::vector<int> ordered_index;
+	std::vector<int> global_depots;
+
+	if (max_coverage_lines_num > 1)
+	{
+
+		// iterator para um set particular
+		auto it_ns = nodesSets.begin() + nodeset;
+
+		if (it_ns != nodesSets.end())
+		{
+
+			total_coverage_lines_num = it_ns->cvLines.size();
+
+			if (total_coverage_lines_num <= max_coverage_lines_num)
+			{
+				it_ns->sub_set.clear();
+				return;
+			}
+
+			groups_num = ceil(total_coverage_lines_num / max_coverage_lines_num);
+			group_coverage_lines_num = total_coverage_lines_num / groups_num;
+
+			vMax = ceil(group_coverage_lines_num);
+			vMin = floor(group_coverage_lines_num);
+
+			groups_max_cl_num = total_coverage_lines_num - (vMin * groups_num);
+
+			resto = abs(total_coverage_lines_num - (groups_max_cl_num * vMax));
+
+			// caso não tenhamos um mínimo suficiente
+			if (vMin < 1)
+			{
+				it_ns->sub_set.clear();
+				return;
+			}
+
+			groups_min_cl_num = resto / vMin;
+
+			sub_set_size.clear();
+			for (int i = 0; i < groups_max_cl_num; i++)
+				sub_set_size.push_back(vMax);
+
+			for (int i = 0; i < groups_min_cl_num; i++)
+				sub_set_size.push_back(vMin);
+
+			if (sub_set_size.size() > 1)
+			{
+				// indices dos nós
+				std::vector<int> v_ids;
+
+				// create vector of all targets indices
+				v_ids = it_ns->cvLines;
+
+				it_ns->sub_set.clear();
+
+				// first sub_set index on vector
+				auto i = v_ids.begin();
+
+				// agrupar todas as linhas
+				while (!v_ids.empty())
+				{
+
+					// i é um iterator para o v_id
+					i = v_ids.begin();
+
+					// obter a quantidad de linhas do sub grupo
+					split = sub_set_size.back();
+					// remover a quantidade de linhas do sub grupo do vetor
+					sub_set_size.pop_back();
+
+					// obter as distâncias dos nós i e i+1 da linha de referência  em relação aos demais nós.
+					mapOfLines.insert(std::pair<int, double>(*i, 0));
+					for (std::vector<int>::iterator j = v_ids.begin() + 1; j != v_ids.end(); ++j)
+					{
+
+						double value = (graph[*i][*j] + graph[*i + 1][*j + 1]);
+
+						// build a map of lines
+						mapOfLines.insert(std::pair<int, double>(*j, value));
+					}
+					// criar o conjunto ordenado (crescente) das distâncias entre a linha representada
+
+					// pelo indice i
+					std::vector<std::pair<int, double>> setOfLines;
+					setOfLines.insert(setOfLines.begin(), mapOfLines.begin(), mapOfLines.end());
+					std::sort(setOfLines.begin(), setOfLines.end(), compFunctor);
+
+					ordered_index.clear();
+					for (std::pair<int, double> el : setOfLines)
+						ordered_index.emplace_back(el.first);
+
+					// inicializar um novo sub_set
+					it_ns->sub_set.push_back(sub_set_data());
+
+					// inserir a quantidade de índices no sub-grupo
+					auto end_id = ordered_index.begin();
+
+					// avançar o iterator para o split do vetor ordered
+					std::advance(end_id, split);
+
+					std::vector<int> temp = ordered_index;
+
+					try
+					{
+						temp.resize(split);
+						temp.shrink_to_fit();
+						it_ns->sub_set.back().cvLines = temp;
+						it_ns->sub_set.back().depots = it_ns->depots;
+						// remover de index os índices inseridos no sub grupo
+						if (end_id <= ordered_index.end())
 							ordered_index.erase(ordered_index.begin(), end_id);
-						}
-						catch (const std::exception &x)
-						{
-							std::cerr << "Problem  on Subset  update!!" << '\n';
-						}
-
-						v_ids = ordered_index;
-
-						mapOfLines.clear();
 					}
-				}
-				++it_ns;
-			}
-		}
-	}
-
-	// função para atualizar o subset de um nodeset particular.
-	// é necessário recalcular a quantidade de linhas, visto que as funções de vizinhança podem alterar a quantidade de linhas do nodeset (shift e swap)
-	void Graph::UpdateSubSet(int nodeset)
-	{
-
-		float total_coverage_lines_num;
-		float group_coverage_lines_num;
-
-		float groups_num;
-		int max_coverage_lines_num = cvl_subset_num;
-		int groups_max_cl_num;
-		int groups_min_cl_num;
-		int resto;
-		int vMax;
-		int vMin;
-		int split;
-		std::map<int, double> mapOfLines;
-		std::vector<int> sub_set_size;
-		std::vector<int> ordered_index;
-		std::vector<int> global_depots;
-
-		if (max_coverage_lines_num > 1)
-		{
-
-			// iterator para um set particular
-			auto it_ns = nodesSets.begin() + nodeset;
-
-			if (it_ns != nodesSets.end())
-			{
-
-				total_coverage_lines_num = it_ns->cvLines.size();
-
-				if (total_coverage_lines_num <= max_coverage_lines_num)
-				{
-					it_ns->sub_set.clear();
-					return;
-				}
-
-				groups_num = ceil(total_coverage_lines_num / max_coverage_lines_num);
-				group_coverage_lines_num = total_coverage_lines_num / groups_num;
-
-				vMax = ceil(group_coverage_lines_num);
-				vMin = floor(group_coverage_lines_num);
-
-				groups_max_cl_num = total_coverage_lines_num - (vMin * groups_num);
-
-				resto = abs(total_coverage_lines_num - (groups_max_cl_num * vMax));
-
-				// caso não tenhamos um mínimo suficiente
-				if (vMin < 1)
-				{
-					it_ns->sub_set.clear();
-					return;
-				}
-
-				groups_min_cl_num = resto / vMin;
-
-				sub_set_size.clear();
-				for (int i = 0; i < groups_max_cl_num; i++)
-					sub_set_size.push_back(vMax);
-
-				for (int i = 0; i < groups_min_cl_num; i++)
-					sub_set_size.push_back(vMin);
-
-				if (sub_set_size.size() > 1)
-				{
-					// indices dos nós
-					std::vector<int> v_ids;
-
-					// create vector of all targets indices
-					v_ids = it_ns->cvLines;
-
-					it_ns->sub_set.clear();
-
-					// first sub_set index on vector
-					auto i = v_ids.begin();
-
-					// agrupar todas as linhas
-					while (!v_ids.empty())
+					catch (const std::exception &x)
 					{
-
-						// i é um iterator para o v_id
-						i = v_ids.begin();
-
-						// obter a quantidad de linhas do sub grupo
-						split = sub_set_size.back();
-						// remover a quantidade de linhas do sub grupo do vetor
-						sub_set_size.pop_back();
-
-						// obter as distâncias dos nós i e i+1 da linha de referência  em relação aos demais nós.
-						mapOfLines.insert(std::pair<int, double>(*i, 0));
-						for (std::vector<int>::iterator j = v_ids.begin() + 1; j != v_ids.end(); ++j)
-						{
-
-							double value = (graph[*i][*j] + graph[*i + 1][*j + 1]);
-
-							// build a map of lines
-							mapOfLines.insert(std::pair<int, double>(*j, value));
-						}
-						// criar o conjunto ordenado (crescente) das distâncias entre a linha representada
-
-						// pelo indice i
-						std::vector<std::pair<int, double>> setOfLines;
-						setOfLines.insert(setOfLines.begin(), mapOfLines.begin(), mapOfLines.end());
-						std::sort(setOfLines.begin(), setOfLines.end(), compFunctor);
-
-						ordered_index.clear();
-						for (std::pair<int, double> el : setOfLines)
-							ordered_index.emplace_back(el.first);
-
-						// inicializar um novo sub_set
-						it_ns->sub_set.push_back(sub_set_data());
-
-						// inserir a quantidade de índices no sub-grupo
-						auto end_id = ordered_index.begin();
-
-						// avançar o iterator para o split do vetor ordered
-						std::advance(end_id, split);
-
-						std::vector<int> temp = ordered_index;
-
-						try
-						{
-							temp.resize(split);
-							temp.shrink_to_fit();
-							it_ns->sub_set.back().cvLines = temp;
-							it_ns->sub_set.back().depots = it_ns->depots;
-							// remover de index os índices inseridos no sub grupo
-							if (end_id <= ordered_index.end())
-								ordered_index.erase(ordered_index.begin(), end_id);
-						}
-						catch (const std::exception &x)
-						{
-							std::cerr << "Problem  on Subset  update!!" << '\n';
-						}
-
-						v_ids = ordered_index;
-
-						mapOfLines.clear();
+						std::cerr << "Problem  on Subset  update!!" << '\n';
 					}
-				}
 
-				++it_ns;
+					v_ids = ordered_index;
+
+					mapOfLines.clear();
+				}
 			}
+
+			++it_ns;
 		}
 	}
+}
 
-	void Graph::mapRobotTypeGroups()
+void Graph::mapRobotTypeGroups()
+{
+	std::vector<std::string> robotType_temp;
+	std::string sType;
+	uint ndiff = 0;
+	int robotID;
+	int type = 0;
+	for (uint i = 0; i < nodesSets.size(); i++)
 	{
-		std::vector<std::string> robotType_temp;
-		std::string sType;
-		uint ndiff = 0;
-		int robotID;
-		int type = 0;
-		for (uint i = 0; i < nodesSets.size(); i++)
+		ndiff = 0;
+		robotID = nodesSets[i].robotID;
+		sType = input.getRobotConfigName(robotID);
+
+		auto itMap = mapRobotGroup.end();
+
+		if (robotType_temp.empty())
 		{
-			ndiff = 0;
-			robotID = nodesSets[i].robotID;
-			sType = input.getRobotConfigName(robotID);
+			robotType_temp.emplace_back(sType);
+			itMap = mapRobotGroup.emplace_hint(itMap, type, std::set<int>());
+			itMap->second.insert(i);
+			;
+		}
 
-			auto itMap = mapRobotGroup.end();
-
-			if (robotType_temp.empty())
+		else
+		{
+			// inserir os robôs de tipos diferentes
+			// for(auto itTemp = robotType_temp.begin();itTemp!=robotType_temp.end();++itTemp){
+			for (uint typeID = 0; typeID < robotType_temp.size(); ++typeID)
 			{
+				if (sType.compare(robotType_temp[typeID]) == 0)
+				{
+					itMap = mapRobotGroup.emplace_hint(itMap, typeID, std::set<int>());
+					itMap->second.insert(i);
+					break;
+				}
+
+				else
+					ndiff++;
+			}
+			if (ndiff == robotType_temp.size())
+			{
+				type = robotType_temp.size();
 				robotType_temp.emplace_back(sType);
 				itMap = mapRobotGroup.emplace_hint(itMap, type, std::set<int>());
 				itMap->second.insert(i);
-				;
-			}
-
-			else
-			{
-				// inserir os robôs de tipos diferentes
-				// for(auto itTemp = robotType_temp.begin();itTemp!=robotType_temp.end();++itTemp){
-				for (uint typeID = 0; typeID < robotType_temp.size(); ++typeID)
-				{
-					if (sType.compare(robotType_temp[typeID]) == 0)
-					{
-						itMap = mapRobotGroup.emplace_hint(itMap, typeID, std::set<int>());
-						itMap->second.insert(i);
-						break;
-					}
-
-					else
-						ndiff++;
-				}
-				if (ndiff == robotType_temp.size())
-				{
-					type = robotType_temp.size();
-					robotType_temp.emplace_back(sType);
-					itMap = mapRobotGroup.emplace_hint(itMap, type, std::set<int>());
-					itMap->second.insert(i);
-				}
-			}
-		}
-		// imprimir o mapa de tipos de robôs e seus respectivos grupos
-		for (std::pair<int, std::set<int>> p : mapRobotGroup)
-		{
-			std::cout << "Tipo Robo: " << p.first << " Grupo: ";
-			for (int grupo : p.second)
-			{
-				std::cout << ' ' << grupo;
-			}
-
-			std::cout << "\n";
-		}
-	}
-
-	// inserir postos nas localizações dos targets
-	void Graph::insertDepotsOnNodesSets()
-	{
-		for (Set &set : nodesSets)
-		{
-			for (int cvL : set.cvLines)
-			{
-				set.depots.emplace_back(input.getDepotIdOnTarget(cvL));
-				set.depots.emplace_back(input.getDepotIdOnTarget(cvL) + 1);
 			}
 		}
 	}
+	// imprimir o mapa de tipos de robôs e seus respectivos grupos
+	for (std::pair<int, std::set<int>> p : mapRobotGroup)
+	{
+		std::cout << "Tipo Robo: " << p.first << " Grupo: ";
+		for (int grupo : p.second)
+		{
+			std::cout << ' ' << grupo;
+		}
 
-	std::vector<std::pair<int, double>> Graph::getSetsArea()
+		std::cout << "\n";
+	}
+}
+
+// inserir postos nas localizações dos targets
+void Graph::insertDepotsOnNodesSets()
+{
+	for (Set &set : nodesSets)
+	{
+		for (int cvL : set.cvLines)
+		{
+			set.depots.emplace_back(input.getDepotIdOnTarget(cvL));
+			set.depots.emplace_back(input.getDepotIdOnTarget(cvL) + 1);
+		}
+	}
+}
+
+std::vector<std::pair<int, double>> Graph::getSetsArea()
+{
+
+	int node_a, node_b, prev_a, prev_b;
+	prev_a = prev_b = -1;
+	double sum;
+	std::vector<std::pair<int, double>> setsArea;
+	for (unsigned int i = 0; i < nodesSets.size(); i++)
 	{
 
-		int node_a, node_b, prev_a, prev_b;
+		for (unsigned int j = 0; j < nodesSets[i].cvLines.size(); j++)
+		{
+			node_a = nodesSets[i].cvLines[j];
+			node_b = nodesSets[i].cvLines[j] + 1;
+
+			// obter o tamanho da linha de cobertura do inicio e fim de cada grupo
+			if ((prev_a < 0 && prev_b < 0) || (j == nodesSets[i].cvLines.size() - 1))
+			{
+				sum = sum + input.getDistance(node_a, node_b);
+				std::cout << "node_a: " << node_a << " node_b: " << node_b << " " << std::endl;
+			}
+
+			if (prev_a >= 0 && prev_b >= 0)
+			{
+				sum = sum + input.getDistance(node_a, prev_a);
+				sum = sum + input.getDistance(node_b, prev_b);
+			}
+
+			prev_a = node_a;
+			prev_b = node_b;
+		}
+		// insere o vetor
+		setsArea.push_back(std::make_pair(i, sum));
 		prev_a = prev_b = -1;
-		double sum;
-		std::vector<std::pair<int, double>> setsArea;
-		for (unsigned int i = 0; i < nodesSets.size(); i++)
-		{
-
-			for (unsigned int j = 0; j < nodesSets[i].cvLines.size(); j++)
-			{
-				node_a = nodesSets[i].cvLines[j];
-				node_b = nodesSets[i].cvLines[j] + 1;
-
-				// obter o tamanho da linha de cobertura do inicio e fim de cada grupo
-				if ((prev_a < 0 && prev_b < 0) || (j == nodesSets[i].cvLines.size() - 1))
-				{
-					sum = sum + input.getDistance(node_a, node_b);
-					std::cout << "node_a: " << node_a << " node_b: " << node_b << " " << std::endl;
-				}
-
-				if (prev_a >= 0 && prev_b >= 0)
-				{
-					sum = sum + input.getDistance(node_a, prev_a);
-					sum = sum + input.getDistance(node_b, prev_b);
-				}
-
-				prev_a = node_a;
-				prev_b = node_b;
-			}
-			// insere o vetor
-			setsArea.push_back(std::make_pair(i, sum));
-			prev_a = prev_b = -1;
-			sum = 0;
-		}
-
-		// ordena da menor para maior
-		std::sort(setsArea.begin(), setsArea.end(), compFunctor);
-
-		return setsArea;
+		sum = 0;
 	}
 
-	// ordenar em relação a posição dos nós no eixo X.
-	void Graph::sortNodesX()
+	// ordena da menor para maior
+	std::sort(setsArea.begin(), setsArea.end(), compFunctor);
+
+	return setsArea;
+}
+
+// ordenar em relação a posição dos nós no eixo X.
+void Graph::sortNodesX()
+{
+	// Declaring the type of Predicate that accepts 2 nodes and return a bool
+	typedef std::function<bool(Node, Node)> CompNode;
+
+	// Defining a lambda function to compare two nodes. It will compare two nodes using node's position (X position).
+	CompNode compX =
+		[](Node node1, Node node2)
 	{
-		// Declaring the type of Predicate that accepts 2 nodes and return a bool
-		typedef std::function<bool(Node, Node)> CompNode;
+		return node1.getX() < node2.getX();
+	};
 
-		// Defining a lambda function to compare two nodes. It will compare two nodes using node's position (X position).
-		CompNode compX =
-			[](Node node1, Node node2)
+	// assign nodes on input to nodesX
+	nodesX = input.nodes;
+
+	// sort vector of nodes nodesX
+	std::sort(nodesX.begin(), nodesX.end(), compX);
+}
+
+// get all depots between extremes coverages lines
+/*std::vector<int> Graph::getDepotsBetweenNodes(int n1, int n2)
+{
+	std::vector<Node>::iterator begin;
+	std::vector<Node>::iterator end;
+
+	std::vector<int> depots;
+
+	if (n1 == n2)
+		return depots;
+
+	double n2_x;
+	double n1_x;
+
+	std::vector<Node>::iterator it_n1 = nodesX.end();
+	std::vector<Node>::iterator it_n2 = nodesX.end();
+
+	for (std::vector<Node>::iterator it = nodesX.begin(); it != nodesX.end(); ++it)
+	{
+		if ((*it).getNodeId() == n1)
 		{
-			return node1.getX() < node2.getX();
-		};
+			n1_x = it->getX();
+			it_n1 = it;
 
-		// assign nodes on input to nodesX
-		nodesX = input.nodes;
-
-		// sort vector of nodes nodesX
-		std::sort(nodesX.begin(), nodesX.end(), compX);
+			if (it_n2 != nodesX.end())
+				break;
+		}
+		else if ((*it).getNodeId() == n2)
+		{
+			n2_x = it->getX();
+			it_n2 = it;
+			if (it_n1 != nodesX.end())
+				break;
+		}
 	}
 
-	// get all depots between extremes coverages lines
-	std::vector<int> Graph::getDepotsBetweenNodes(int n1, int n2)
+	if (n1_x < n2_x)
 	{
-		std::vector<Node>::iterator begin;
-		std::vector<Node>::iterator end;
+		begin = it_n1;
+		end = it_n2;
+	}
+	else
+	{
+		begin = it_n2;
+		end = it_n1;
+	}
 
-		std::vector<int> depots;
-
-		if (n1 == n2)
-			return depots;
-
-		double n2_x;
-		double n1_x;
-
-		std::vector<Node>::iterator it_n1 = nodesX.end();
-		std::vector<Node>::iterator it_n2 = nodesX.end();
-
-		for (std::vector<Node>::iterator it = nodesX.begin(); it != nodesX.end(); ++it)
+	// ajustar o ponteiro ao primeiro elemento que aparece no vetor de posição
+	for (std::vector<Node>::iterator it = begin; it != nodesX.begin(); --it)
+	{
+		if (isApproximatelyEqual(begin->getX(), it->getX()))
 		{
-			if ((*it).getNodeId() == n1)
-			{
-				n1_x = it->getX();
-				it_n1 = it;
-
-				if (it_n2 != nodesX.end())
-					break;
-			}
-			else if ((*it).getNodeId() == n2)
-			{
-				n2_x = it->getX();
-				it_n2 = it;
-				if (it_n1 != nodesX.end())
-					break;
-			}
-		}
-
-		if (n1_x < n2_x)
-		{
-			begin = it_n1;
-			end = it_n2;
+			begin = it;
 		}
 		else
-		{
-			begin = it_n2;
-			end = it_n1;
-		}
+			break;
+	}
 
-		// ajustar o ponteiro ao primeiro elemento que aparece no vetor de posição
-		for (std::vector<Node>::iterator it = begin; it != nodesX.begin(); --it)
+	// ajustar o ponteiro ao último elemento que aparece no vetor de posição
+	for (std::vector<Node>::iterator it = end; it != nodesX.end(); ++it)
+	{
+		if (isApproximatelyEqual(end->getX(), it->getX()))
 		{
-			if (isApproximatelyEqual(begin->getX(), it->getX()))
-			{
-				begin = it;
-			}
-			else
-				break;
+			end = it;
 		}
+		else
+			break;
+	}
 
-		// ajustar o ponteiro ao último elemento que aparece no vetor de posição
-		for (std::vector<Node>::iterator it = end; it != nodesX.end(); ++it)
+	for (std::vector<Node>::iterator it = begin; it != end; ++it)
+	{
+		if ((it)->getNodeType() == "depot")
 		{
-			if (isApproximatelyEqual(end->getX(), it->getX()))
-			{
-				end = it;
-			}
-			else
-				break;
+			depots.push_back(it->getNodeId());
 		}
+	}
+	return depots;
+}*/
 
-		for (std::vector<Node>::iterator it = begin; it <= end; ++it)
+std::vector<int> Graph::getDepotsBetweenNodes(int n1, int n2)
+{
+	std::vector<int> depots;
+
+	if (n1 == n2)
+		return depots;
+
+	// inicializar com valor sentinela explícito
+	double n1_x = std::numeric_limits<double>::max();
+	double n1_y = std::numeric_limits<double>::max();
+	double n2_x = std::numeric_limits<double>::max();
+	double n2_y = std::numeric_limits<double>::max();
+
+	std::vector<Node>::iterator it_n1 = nodesX.end();
+	std::vector<Node>::iterator it_n2 = nodesX.end();
+
+	for (auto it = nodesX.begin(); it != nodesX.end(); ++it)
+	{
+		if (it->getNodeId() == n1)
 		{
-			if ((*it).getNodeType().compare("depots") == 0)
-			{
-				depots.push_back((*it).getNodeId());
-			}
+			n1_x = it->getX();
+			n1_y = it->getY();
+			it_n1 = it;
 		}
+		else if (it->getNodeId() == n2)
+		{
+			n2_x = it->getX();
+			n2_y = it->getY();
+			it_n2 = it;
+		}
+		if (it_n1 != nodesX.end() && it_n2 != nodesX.end())
+			break;
+	}
+
+	if (it_n1 == nodesX.end() || it_n2 == nodesX.end())
+	{
+		std::cerr << "WARNING: getDepotsBetweenNodes — nó não encontrado em nodesX: "
+				  << n1 << " ou " << n2 << std::endl;
 		return depots;
 	}
 
-	// remover os depots associados a linha de cobertura
-	void Graph::removeDepots(int n1, std::vector<int> &depots)
+	// Bug 1: usar bounding box 2D em vez de apenas X
+	double x_min = std::min(n1_x, n2_x);
+	double x_max = std::max(n1_x, n2_x);
+	double y_min = std::min(n1_y, n2_y);
+	double y_max = std::max(n1_y, n2_y);
+
+	// Bug 2: iterar sobre TODOS os nós e filtrar pelo bounding box
+	// (o loop original com begin/end excluía o nó final)
+	for (auto it = nodesX.begin(); it != nodesX.end(); ++it)
 	{
+		if (it->getNodeType() != "depot")
+			continue;
 
-		std::vector<Node>::iterator cvLine;
-		std::vector<int>::iterator itDepots;
-		std::vector<int> depotsToremove;
+		double dx = it->getX();
+		double dy = it->getY();
 
-		// encontrar a linha de cobertura que será removida no vetor de nós (nodesX)
+		// incluir depots dentro do bounding box entre n1 e n2
+		bool in_x = (x_min - 1e-9 <= dx && dx <= x_max + 1e-9);
+		bool in_y = (y_min - 1e-9 <= dy && dy <= y_max + 1e-9);
+
+		if (in_x && in_y)
+			depots.push_back(it->getNodeId());
+	}
+
+	return depots;
+}
+
+// remover os depots associados a linha de cobertura
+void Graph::removeDepots(int n1, std::vector<int> &depots)
+{
+
+	std::vector<Node>::iterator cvLine;
+	std::vector<int>::iterator itDepots;
+	std::vector<int> depotsToremove;
+
+	// encontrar a linha de cobertura que será removida no vetor de nós (nodesX)
+	for (std::vector<Node>::iterator it = nodesX.begin(); it != nodesX.end(); ++it)
+	{
+		if ((*it).getNodeId() == n1)
+		{
+			cvLine = it;
+			break;
+		}
+	}
+
+	// apontar para o próximo depot a direita da cvLine
+	while ((*cvLine).getNodeType().compare("target") == 0 && cvLine != nodesX.end())
+	{
+		++cvLine;
+	}
+	// caso tenhamos mais depots associado a linha, adicionamos no vetor depotsToremove
+	// obter todos os depots a direita da linha de cobertura
+	while ((*cvLine).getNodeType().compare("depot") == 0)
+	{
+		depotsToremove.push_back((*cvLine).getNodeId());
+		cvLine++;
+	}
+
+	std::cout << "Remover: ";
+	for (int i : depotsToremove)
+	{
+		std::cout << " " << i;
+	}
+	std::cout << std::endl;
+
+	std::cout << "grupo k2 : ";
+	for (int i : depots)
+	{
+		std::cout << " " << i;
+	}
+	std::cout << std::endl;
+
+	// percorrermos o vetor de depots até encontrar o primeiro depot que deverá ser removido
+	itDepots = depots.begin();
+
+	std::cout << "nodes removed: ";
+	// enquanto a lista não for vazia: //remover os depots seguintes
+	while (!depotsToremove.empty() && itDepots != depots.end())
+	{
+		if (*itDepots == depotsToremove.front())
+		{
+			std::cout << *itDepots;
+			depots.erase(itDepots);
+			depotsToremove.erase(depotsToremove.begin());
+		}
+		itDepots++;
+	}
+	std::cout << std::endl;
+}
+
+// verificar a possibilidade(custo) para inserir a linha targetId (pertencente a k2) no grupo k1.
+// k2 grupo da linha de cobertura identificada por targetID que se deseja inserir no grupo k1
+bool Graph::insertNewCVLine(int k1, int k2, int targetID, std::vector<int> &depotsK1, std::vector<int> &depotsK2)
+{
+
+	std::vector<Node>::iterator groupNodesEdge;
+	std::vector<Node>::iterator newCVLineEdge;
+
+	if (depotsK1.empty())
+		return (false);
+
+	std::vector<int> newDepots;
+
+	double costToLast = std::numeric_limits<double>::max();
+	double costToFirst = std::numeric_limits<double>::max();
+
+	int robotID = nodesSets[k1].robotID;
+
+	std::cout << "k1: " << k1 << " K2: " << k2 << std::endl;
+	std::cout << std::numeric_limits<double>::max() << std::endl;
+
+	// obter os depots que estão entre as linhas de cobertura do grupo k1
+	auto result = minmax_element(nodesSets[k1].cvLines.begin(), nodesSets[k1].cvLines.end());
+
+	// se a linha de cobertura l2 a ser inserida(linha representada por cvLineID do grupo k2) estiver a direita do grupo k1
+	// em relação a última linha de cobertura à direita do grupo k1(*result.second)
+	if (targetID > *result.second)
+	{
+		// calcular distância entre o depot à direita do grupo k1 e à esquerda da linha inserida
+
+		// varrer o vetor de nós ordenados em relação ao eixo x para encontrar os índices das linhas
 		for (std::vector<Node>::iterator it = nodesX.begin(); it != nodesX.end(); ++it)
 		{
-			if ((*it).getNodeId() == n1)
+			// se o iterador apontar para a linha de cobertura targetId
+			if ((*it).getNodeId() == targetID)
 			{
-				cvLine = it;
+				// aponte o iterador de cobertura para targetID
+				newCVLineEdge = it;
+				// encontra o primeiro depot anterior à linha de cobertura. Para isso, retorne aos à esquerda enquanto
+				//  os nós forem targets e não seja o início do vetor de nós (nodesX)
+				while ((*newCVLineEdge).getNodeType().compare("target") == 0 && newCVLineEdge != nodesX.begin())
+				{
+					--newCVLineEdge;
+				}
+
+				// inserir todos os depots antes de targetID até a primeira linha de cobertura à esquerda de targetID
+				while ((*newCVLineEdge).getNodeType().compare("depot") == 0 && newCVLineEdge != nodesX.begin())
+				{
+					newDepots.push_back((*newCVLineEdge).getNodeId());
+					--newCVLineEdge;
+				}
+
 				break;
 			}
 		}
-
-		// apontar para o próximo depot a direita da cvLine
-		while ((*cvLine).getNodeType().compare("target") == 0 && cvLine != nodesX.end())
+	}
+	// caso a linha a ser inserida esteja a esquerda da linha mais esquerda do grupo k1
+	else if (targetID < *result.first)
+	{
+		// distância entre o depot à esquerda do grupo e o depot à direita da linha inserida
+		for (std::vector<Node>::iterator it = nodesX.begin(); it != nodesX.end(); ++it)
 		{
-			++cvLine;
-		}
-		// caso tenhamos mais depots associado a linha, adicionamos no vetor depotsToremove
-		// obter todos os depots a direita da linha de cobertura
-		while ((*cvLine).getNodeType().compare("depot") == 0)
-		{
-			depotsToremove.push_back((*cvLine).getNodeId());
-			cvLine++;
-		}
-
-		std::cout << "Remover: ";
-		for (int i : depotsToremove)
-		{
-			std::cout << " " << i;
-		}
-		std::cout << std::endl;
-
-		std::cout << "grupo k2 : ";
-		for (int i : depots)
-		{
-			std::cout << " " << i;
-		}
-		std::cout << std::endl;
-
-		// percorrermos o vetor de depots até encontrar o primeiro depot que deverá ser removido
-		itDepots = depots.begin();
-
-		std::cout << "nodes removed: ";
-		// enquanto a lista não for vazia: //remover os depots seguintes
-		while (!depotsToremove.empty() && itDepots != depots.end())
-		{
-			if (*itDepots == depotsToremove.front())
+			if ((*it).getNodeId() == targetID)
 			{
-				std::cout << *itDepots;
-				depots.erase(itDepots);
-				depotsToremove.erase(depotsToremove.begin());
+
+				// apontar novamente para a cvLine selecionada
+				newCVLineEdge = it;
+				// obter o próximo depot à direita
+				while ((*newCVLineEdge).getNodeType().compare("target") == 0 && newCVLineEdge != nodesX.end())
+					++newCVLineEdge;
+				// inserir no vetor de vizinhança todos os depots até a próxima cvl à direita.
+				while ((*newCVLineEdge).getNodeType().compare("depot") == 0 && newCVLineEdge != nodesX.end())
+				{
+					newDepots.push_back((*newCVLineEdge).getNodeId());
+					++newCVLineEdge;
+				}
+				break;
 			}
-			itDepots++;
 		}
-		std::cout << std::endl;
 	}
 
-	// verificar a possibilidade(custo) para inserir a linha targetId (pertencente a k2) no grupo k1.
-	// k2 grupo da linha de cobertura identificada por targetID que se deseja inserir no grupo k1
-	bool Graph::insertNewCVLine(int k1, int k2, int targetID, std::vector<int> &depotsK1, std::vector<int> &depotsK2)
+	// inserir os depósitos associados a k2 na lista de depot do grupo k1
+	if (!newDepots.empty())
 	{
 
-		std::vector<Node>::iterator groupNodesEdge;
-		std::vector<Node>::iterator newCVLineEdge;
+		std::cout << "newDepots: ";
+		for (int i : newDepots)
+			std::cout << i << " ";
+		std::cout << std::endl;
 
-		if (depotsK1.empty())
-			return (false);
+		std::cout << "depots: ";
+		for (int i : depotsK1)
+			std::cout << i << " ";
+		std::cout << std::endl;
 
-		std::vector<int> newDepots;
+		int lastDepotID = newDepots.back();
+		int firstDepotID = newDepots.front();
 
-		double costToLast = std::numeric_limits<double>::max();
-		double costToFirst = std::numeric_limits<double>::max();
+		std::vector<int>::iterator itDepots;
+		std::vector<int>::iterator pointInsertion;
 
-		int robotID = nodesSets[k1].robotID;
-
-		std::cout << "k1: " << k1 << " K2: " << k2 << std::endl;
-		std::cout << std::numeric_limits<double>::max() << std::endl;
-
-		// obter os depots que estão entre as linhas de cobertura do grupo k1
-		auto result = minmax_element(nodesSets[k1].cvLines.begin(), nodesSets[k1].cvLines.end());
-
-		// se a linha de cobertura l2 a ser inserida(linha representada por cvLineID do grupo k2) estiver a direita do grupo k1
-		// em relação a última linha de cobertura à direita do grupo k1(*result.second)
-		if (targetID > *result.second)
+		if (firstDepotID < depotsK1.front() && lastDepotID < depotsK1.front())
 		{
-			// calcular distância entre o depot à direita do grupo k1 e à esquerda da linha inserida
-
-			// varrer o vetor de nós ordenados em relação ao eixo x para encontrar os índices das linhas
-			for (std::vector<Node>::iterator it = nodesX.begin(); it != nodesX.end(); ++it)
-			{
-				// se o iterador apontar para a linha de cobertura targetId
-				if ((*it).getNodeId() == targetID)
-				{
-					// aponte o iterador de cobertura para targetID
-					newCVLineEdge = it;
-					// encontra o primeiro depot anterior à linha de cobertura. Para isso, retorne aos à esquerda enquanto
-					//  os nós forem targets e não seja o início do vetor de nós (nodesX)
-					while ((*newCVLineEdge).getNodeType().compare("target") == 0 && newCVLineEdge != nodesX.begin())
-					{
-						--newCVLineEdge;
-					}
-
-					// inserir todos os depots antes de targetID até a primeira linha de cobertura à esquerda de targetID
-					while ((*newCVLineEdge).getNodeType().compare("depot") == 0 && newCVLineEdge != nodesX.begin())
-					{
-						newDepots.push_back((*newCVLineEdge).getNodeId());
-						--newCVLineEdge;
-					}
-
-					break;
-				}
-			}
+			costToFirst = getFlightTime(input.getDistance(firstDepotID, depotsK1.front()), input.getRobotVel(robotID));
+			pointInsertion = depotsK1.begin();
 		}
-		// caso a linha a ser inserida esteja a esquerda da linha mais esquerda do grupo k1
-		else if (targetID < *result.first)
+		else if (firstDepotID > depotsK1.back() && lastDepotID > depotsK1.back())
 		{
-			// distância entre o depot à esquerda do grupo e o depot à direita da linha inserida
-			for (std::vector<Node>::iterator it = nodesX.begin(); it != nodesX.end(); ++it)
+			costToLast = getFlightTime(input.getDistance(lastDepotID, depotsK1.back()), input.getRobotVel(robotID));
+			pointInsertion = depotsK1.end();
+		}
+		else if (firstDepotID > depotsK1.front() && lastDepotID < depotsK1.back())
+		{
+			itDepots = depotsK1.begin();
+			while (itDepots != depotsK1.end() - 1)
 			{
-				if ((*it).getNodeId() == targetID)
+				if (firstDepotID > *itDepots && lastDepotID < *(itDepots + 1))
 				{
-
-					// apontar novamente para a cvLine selecionada
-					newCVLineEdge = it;
-					// obter o próximo depot à direita
-					while ((*newCVLineEdge).getNodeType().compare("target") == 0 && newCVLineEdge != nodesX.end())
-						++newCVLineEdge;
-					// inserir no vetor de vizinhança todos os depots até a próxima cvl à direita.
-					while ((*newCVLineEdge).getNodeType().compare("depot") == 0 && newCVLineEdge != nodesX.end())
-					{
-						newDepots.push_back((*newCVLineEdge).getNodeId());
-						++newCVLineEdge;
-					}
+					costToFirst = getFlightTime(input.getDistance(firstDepotID, *itDepots), input.getRobotVel(robotID));
+					costToLast = getFlightTime(input.getDistance(lastDepotID, (*itDepots) + 1), input.getRobotVel(robotID));
+					pointInsertion = itDepots + 1;
 					break;
 				}
+				++itDepots;
 			}
 		}
 
-		// inserir os depósitos associados a k2 na lista de depot do grupo k1
-		if (!newDepots.empty())
+		if (costToFirst < input.getRobotFuel(robotID) || costToLast < input.getRobotFuel(robotID))
 		{
-
-			std::cout << "newDepots: ";
-			for (int i : newDepots)
-				std::cout << i << " ";
-			std::cout << std::endl;
-
-			std::cout << "depots: ";
+			depotsK1.insert(pointInsertion, newDepots.begin(), newDepots.end());
+			removeDepots(targetID, depotsK2);
+			std::cout << "depots_inserted: ";
 			for (int i : depotsK1)
 				std::cout << i << " ";
 			std::cout << std::endl;
 
-			int lastDepotID = newDepots.back();
-			int firstDepotID = newDepots.front();
-
-			std::vector<int>::iterator itDepots;
-			std::vector<int>::iterator pointInsertion;
-
-			if (firstDepotID < depotsK1.front() && lastDepotID < depotsK1.front())
-			{
-				costToFirst = getFlightTime(input.getDistance(firstDepotID, depotsK1.front()), input.getRobotVel(robotID));
-				pointInsertion = depotsK1.begin();
-			}
-			else if (firstDepotID > depotsK1.back() && lastDepotID > depotsK1.back())
-			{
-				costToLast = getFlightTime(input.getDistance(lastDepotID, depotsK1.back()), input.getRobotVel(robotID));
-				pointInsertion = depotsK1.end();
-			}
-			else if (firstDepotID > depotsK1.front() && lastDepotID < depotsK1.back())
-			{
-				itDepots = depotsK1.begin();
-				while (itDepots != depotsK1.end() - 1)
-				{
-					if (firstDepotID > *itDepots && lastDepotID < *(itDepots + 1))
-					{
-						costToFirst = getFlightTime(input.getDistance(firstDepotID, *itDepots), input.getRobotVel(robotID));
-						costToLast = getFlightTime(input.getDistance(lastDepotID, (*itDepots) + 1), input.getRobotVel(robotID));
-						pointInsertion = itDepots + 1;
-						break;
-					}
-					++itDepots;
-				}
-			}
-
-			if (costToFirst < input.getRobotFuel(robotID) || costToLast < input.getRobotFuel(robotID))
-			{
-				depotsK1.insert(pointInsertion, newDepots.begin(), newDepots.end());
-				removeDepots(targetID, depotsK2);
-				std::cout << "depots_inserted: ";
-				for (int i : depotsK1)
-					std::cout << i << " ";
-				std::cout << std::endl;
-
-				return true;
-			}
-		}
-		return false;
-	}
-
-	void Graph::setAllNodesCosts()
-	{
-		int nTargets, nDepots, robotID = 0;
-
-		// para cada grupo
-		for (unsigned int k = 0; k < nodesSets.size(); ++k)
-		{
-			double cost = 0;
-			nTargets = nDepots = 0;
-
-			robotID = nodesSets[k].robotID;
-
-			nDepots = nodesSets[k].depots.size();
-
-			input.maxFuelCost.resize(input.getRobotNum());
-			input.constM.resize(input.getRobotNum());
-
-			// unir os vetores de depots com linhas de cobetura(cvLines)
-			std::vector<int> nodes = nodesSets[k].depots;
-			// nodes.insert(nodes.end(),nodesSets[k].cvLines.begin(),nodesSets[k].cvLines.end());
-			nodes.insert(nodes.begin() + nDepots, input.getRobotBaseId(robotID));
-
-			// A base inserida conta com depot
-			nDepots = nDepots + 1;
-
-			// inserir todos os targets. Cada cvLine possui dois targets
-			for (int i : nodesSets[k].cvLines)
-			{
-				nodes.push_back(i);
-				nodes.push_back(i + 1);
-				nTargets = nTargets + 2;
-			}
-
-			// inicializa o conjunto
-			coverageSets.push_back(std::pair<std::vector<std::pair<std::vector<double>, int>>, graphInfo>());
-
-			// adiciona as quantidades de deposts e targets ao grupo k
-			coverageSets[k].second.D = nDepots;
-			coverageSets[k].second.T = nTargets;
-			coverageSets[k].second.baseID = nDepots - 1;
-			coverageSets[k].second.robotID = robotID;
-
-			// atribuir os custos entre todos os nós
-			for (uint i = 0; i < nodes.size(); i++)
-			{
-				// inicializa o par vetor de distância e id do nó.
-				coverageSets[k].first.push_back(std::pair<std::vector<double>, int>());
-				coverageSets[k].first[i].second = nodes[i];
-				for (uint j = i; j < nodes.size(); j++)
-				{
-					cost = getFlightTime(graph[nodes[i]][nodes[j]], input.getRobotVel(robotID));
-					coverageSets[k].first[i].first.push_back(cost);
-					if (cost > input.maxFuelCost[k])
-					{
-						input.maxFuelCost[k] = cost;
-						input.constM[k] = input.getRobotFuel(robotID) + input.maxFuelCost[k];
-					}
-				}
-			}
+			return true;
 		}
 	}
+	return false;
+}
 
-	// atualiza o coverageSets(operador do grupo de cobertura) com base nas informações dos nodesSet (operador de linhas em grupo)
-	void Graph::updateCoverageSet(int k)
+void Graph::setAllNodesCosts()
+{
+	int nTargets, nDepots, robotID = 0;
+
+	// para cada grupo
+	for (unsigned int k = 0; k < nodesSets.size(); ++k)
 	{
-		int nTargets = 0;
-		int nDepots = 0;
-		int robotID = 0;
 		double cost = 0;
+		nTargets = nDepots = 0;
 
-		// nTargets = nodesSets[k].cvLines.size()*2;
+		robotID = nodesSets[k].robotID;
+
 		nDepots = nodesSets[k].depots.size();
 
-		// id do robô atribuído ao grupo k
-		robotID = nodesSets[k].robotID;
+		input.maxFuelCost.resize(input.getRobotNum());
+		input.constM.resize(input.getRobotNum());
 
 		// unir os vetores de depots com linhas de cobetura(cvLines)
 		std::vector<int> nodes = nodesSets[k].depots;
-
-		// inserir a base
+		// nodes.insert(nodes.end(),nodesSets[k].cvLines.begin(),nodesSets[k].cvLines.end());
 		nodes.insert(nodes.begin() + nDepots, input.getRobotBaseId(robotID));
 
-		// A base inserida conta como depot
+		// A base inserida conta com depot
 		nDepots = nDepots + 1;
 
-		// inserir todos os  id dos targets em nodeSets. Para cada cvline inserir dois nós em nodes. Os node serão inseridos em coverageSets;
+		// inserir todos os targets. Cada cvLine possui dois targets
 		for (int i : nodesSets[k].cvLines)
 		{
 			nodes.push_back(i);
@@ -1523,32 +3093,21 @@
 			nTargets = nTargets + 2;
 		}
 
-		// delete old set
-		coverageSets[k].first.clear();
+		// inicializa o conjunto
+		coverageSets.push_back(std::pair<std::vector<std::pair<std::vector<double>, int>>, graphInfo>());
 
-		// adiciona as quantidades de depots e targets ao grupo
+		// adiciona as quantidades de deposts e targets ao grupo k
 		coverageSets[k].second.D = nDepots;
 		coverageSets[k].second.T = nTargets;
+		coverageSets[k].second.baseID = nDepots - 1;
 		coverageSets[k].second.robotID = robotID;
 
-		// id da base é nDepot -1.
-		coverageSets[k].second.baseID = nDepots - 1;
-
-		// reset max fuel cost at sets k1 and k2
-		input.maxFuelCost[k] = 0;
-
-		// calculate new  costs, maxFuel and  constM to k1
-		// atribuir as distância entre todos os nós
+		// atribuir os custos entre todos os nós
 		for (uint i = 0; i < nodes.size(); i++)
 		{
 			// inicializa o par vetor de distância e id do nó.
 			coverageSets[k].first.push_back(std::pair<std::vector<double>, int>());
-
-			// inserir o indice id do nó em cada pair <vetor, inteiro>. Nesse caso, o vetor armazena
-			//  as distância do nó id aos outro nós.
 			coverageSets[k].first[i].second = nodes[i];
-
-			// inserir o custo do node[i] (identificador) a todos os outros nodes no vetor
 			for (uint j = i; j < nodes.size(); j++)
 			{
 				cost = getFlightTime(graph[nodes[i]][nodes[j]], input.getRobotVel(robotID));
@@ -1561,301 +3120,377 @@
 			}
 		}
 	}
+}
 
-	// atualiza o coverageSets(operador do grupo de cobertura) com base nas informações dos nodesSet (operador de linhas em grupo)
-	void Graph::Convert_NS_to_CS(Set nodes_set)
+// atualiza o coverageSets(operador do grupo de cobertura) com base nas informações dos nodesSet (operador de linhas em grupo)
+void Graph::updateCoverageSet(int k)
+{
+	int nTargets = 0;
+	int nDepots = 0;
+	int robotID = 0;
+	double cost = 0;
+
+	// nTargets = nodesSets[k].cvLines.size()*2;
+	nDepots = nodesSets[k].depots.size();
+
+	// id do robô atribuído ao grupo k
+	robotID = nodesSets[k].robotID;
+
+	// unir os vetores de depots com linhas de cobetura(cvLines)
+	std::vector<int> nodes = nodesSets[k].depots;
+
+	// inserir a base
+	nodes.insert(nodes.begin() + nDepots, input.getRobotBaseId(robotID));
+
+	// A base inserida conta como depot
+	nDepots = nDepots + 1;
+
+	// inserir todos os  id dos targets em nodeSets. Para cada cvline inserir dois nós em nodes. Os node serão inseridos em coverageSets;
+	for (int i : nodesSets[k].cvLines)
+	{
+		nodes.push_back(i);
+		nodes.push_back(i + 1);
+		nTargets = nTargets + 2;
+	}
+
+	// delete old set
+	coverageSets[k].first.clear();
+
+	// adiciona as quantidades de depots e targets ao grupo
+	coverageSets[k].second.D = nDepots;
+	coverageSets[k].second.T = nTargets;
+	coverageSets[k].second.robotID = robotID;
+
+	// id da base é nDepot -1.
+	coverageSets[k].second.baseID = nDepots - 1;
+
+	// reset max fuel cost at sets k1 and k2
+	input.maxFuelCost[k] = 0;
+
+	// calculate new  costs, maxFuel and  constM to k1
+	// atribuir as distância entre todos os nós
+	for (uint i = 0; i < nodes.size(); i++)
+	{
+		// inicializa o par vetor de distância e id do nó.
+		coverageSets[k].first.push_back(std::pair<std::vector<double>, int>());
+
+		// inserir o indice id do nó em cada pair <vetor, inteiro>. Nesse caso, o vetor armazena
+		//  as distância do nó id aos outro nós.
+		coverageSets[k].first[i].second = nodes[i];
+
+		// inserir o custo do node[i] (identificador) a todos os outros nodes no vetor
+		for (uint j = i; j < nodes.size(); j++)
+		{
+			cost = getFlightTime(graph[nodes[i]][nodes[j]], input.getRobotVel(robotID));
+			coverageSets[k].first[i].first.push_back(cost);
+			if (cost > input.maxFuelCost[k])
+			{
+				input.maxFuelCost[k] = cost;
+				input.constM[k] = input.getRobotFuel(robotID) + input.maxFuelCost[k];
+			}
+		}
+	}
+}
+
+// atualiza o coverageSets(operador do grupo de cobertura) com base nas informações dos nodesSet (operador de linhas em grupo)
+void Graph::Convert_NS_to_CS(Set nodes_set)
+{
+
+	int nTargets = 0;
+	int nDepots = 0;
+	int robotID = 0;
+	double cost = 0;
+
+	// 🔴 ASSERT 1 — set_id válido (ANTES de usar input.maxFuelCost)
+	assert(nodes_set.robotID >= 0);
+	assert(nodes_set.robotID < input.maxFuelCost.size());
+
+	nDepots = nodes_set.depots.size();
+
+	// 🔴 ASSERT 2 — robotID válido
+	// id do robô atribuído ao grupo k
+	robotID = nodes_set.robotID;
+	assert(robotID >= 0);
+	assert(robotID < input.getRobotNum());
+
+	// unir os vetores de depots com linhas de cobetura(cvLines)
+	std::vector<int> nodes = nodes_set.depots;
+
+	// 🔴 ASSERT 3 — depots válidos no grafo
+	for (int d : nodes)
+	{
+		assert(d >= 0);
+		assert(d < graph.size());
+	}
+
+	// inserir a base
+
+	int baseID = input.getRobotBaseId(robotID);
+	assert(baseID >= 0);
+	assert(baseID < graph.size());
+	nodes.insert(nodes.begin() + nDepots, baseID);
+
+	// A base inserida conta como depot
+	nDepots = nDepots + 1;
+
+	// inserir todos os id dos targets em nodeSets. Para cada cvline inserir dois nós em nodes. Os node serão inseridos em coverageSets;
+	for (int i : nodes_set.cvLines)
+	{
+		// 🔴 ASSERT 4 — cvLines válidos
+		assert(i >= 0);
+		assert(i + 1 < graph.size());
+
+		nodes.push_back(i);
+		nodes.push_back(i + 1);
+		nTargets = nTargets + 2;
+	}
+
+	// delete old set
+	coverage_set.first.clear();
+
+	// delete old cv index;
+	map_cvset_id_to_node_id.clear();
+
+	// adiciona as quantidades de depots e targets ao grupo
+	coverage_set.second.D = nDepots;
+	coverage_set.second.T = nTargets;
+	coverage_set.second.robotID = robotID;
+
+	// id da base é nDepot -1.
+	coverage_set.second.baseID = nDepots - 1;
+
+	// reset max fuel cost at sets k1 and k2
+	input.maxFuelCost[nodes_set.set_id] = 0;
+
+	// calculate new  costs, maxFuel and  constM to k1
+	// atribuir as distância entre todos os nós
+	for (uint i = 0; i < nodes.size(); i++)
 	{
 
-		int nTargets = 0;
-		int nDepots = 0;
-		int robotID = 0;
-		double cost = 0;
+		// 🔴 ASSERT 5 — índice i válido
+		assert(i < nodes.size());
+		assert(nodes[i] >= 0);
+		assert(nodes[i] < graph.size());
 
+		// atribui valor máximo para o identificado do menor combustível
+		// para atingir algum posto
+		// inicializa o par vetor de distância e id do nó.
+		coverage_set.first.push_back(std::pair<std::vector<double>, int>());
 
-		// 🔴 ASSERT 1 — set_id válido (ANTES de usar input.maxFuelCost)
-    	assert(nodes_set.set_id >= 0);
-   		assert(nodes_set.set_id < input.maxFuelCost.size());
-    	assert(nodes_set.set_id < input.constM.size());
+		// inserir o indice id do nó em cada pair <vetor, inteiro>. Nesse caso, o vetor armazena
+		//  as distância do nó id aos outro nós.
+		coverage_set.first[i].second = nodes[i];
 
-		nDepots = nodes_set.depots.size();
-
-		
-    	// 🔴 ASSERT 2 — robotID válido
-		// id do robô atribuído ao grupo k
-   	 	robotID = nodes_set.robotID;
-    	assert(robotID >= 0);
-   		assert(robotID < input.getRobotNum());
-
-		// unir os vetores de depots com linhas de cobetura(cvLines)
-		std::vector<int> nodes = nodes_set.depots;
-
-		// 🔴 ASSERT 3 — depots válidos no grafo
-    	for (int d : nodes){
-        	assert(d >= 0);
-        	assert(d < graph.size());
-    	}
-
-		// inserir a base
-
-		int baseID = input.getRobotBaseId(robotID);
-    	assert(baseID >= 0);
-    	assert(baseID < graph.size());
-		nodes.insert(nodes.begin() + nDepots, baseID);
-
-		// A base inserida conta como depot
-		nDepots = nDepots + 1;
-
-		// inserir todos os id dos targets em nodeSets. Para cada cvline inserir dois nós em nodes. Os node serão inseridos em coverageSets;
-		for (int i : nodes_set.cvLines)
-		{
-			//🔴 ASSERT 4 — cvLines válidos
-        	assert(i >= 0);
-        	assert(i + 1 < graph.size());
-
-			nodes.push_back(i);
-			nodes.push_back(i + 1);
-			nTargets = nTargets + 2;
-		}
-
-		// delete old set
-		coverage_set.first.clear();
-
-		// delete old cv index;
-		map_cvset_id_to_node_id.clear();
-
-		// adiciona as quantidades de depots e targets ao grupo
-		coverage_set.second.D = nDepots;
-		coverage_set.second.T = nTargets;
-		coverage_set.second.robotID = robotID;
-
-		// id da base é nDepot -1.
-		coverage_set.second.baseID = nDepots - 1;
-
-		// reset max fuel cost at sets k1 and k2
-		input.maxFuelCost[nodes_set.set_id] = 0;
-
-		// calculate new  costs, maxFuel and  constM to k1
-		// atribuir as distância entre todos os nós
-		for (uint i = 0; i < nodes.size(); i++)
-		{
-
-			// 🔴 ASSERT 5 — índice i válido
-        	assert(i < nodes.size());
-        	assert(nodes[i] >= 0);
-        	assert(nodes[i] < graph.size());
-
-			// atribui valor máximo para o identificado do menor combustível
-			// para atingir algum posto
-			// inicializa o par vetor de distância e id do nó.
-			coverage_set.first.push_back(std::pair<std::vector<double>, int>());
-
-			// inserir o indice id do nó em cada pair <vetor, inteiro>. Nesse caso, o vetor armazena
-			//  as distância do nó id aos outro nós.
-			coverage_set.first[i].second = nodes[i];
-
-			// criar o map para obter do indice do grafo o indice do coverage_set
-			// 🔴 ASSERT 6 — map consistente
-			auto [it, inserted] = 
+		// criar o map para obter do indice do grafo o indice do coverage_set
+		// 🔴 ASSERT 6 — map consistente
+		auto [it, inserted] =
 			map_cvset_id_to_node_id.emplace(nodes[i], i);
-			assert(inserted); // garantir que a inserção foi realizada com sucesso
+		assert(inserted); // garantir que a inserção foi realizada com sucesso
 
-			// inserir o custo do node[i] (identificador) a todos os outros nodes no vetor
-			for (uint j = i; j < nodes.size(); j++)
+		// inserir o custo do node[i] (identificador) a todos os outros nodes no vetor
+		for (uint j = i; j < nodes.size(); j++)
+		{
+
+			// 🔴 ASSERT 7 — índice j válido
+			assert(nodes[j] >= 0);
+			assert(nodes[j] < graph.size());
+
+			cost = getFlightTime(graph[nodes[i]][nodes[j]], input.getRobotVel(robotID));
+
+			// 🔴 ASSERT 8 — custo válido
+			assert(std::isfinite(cost));
+			assert(cost >= 0.0);
+
+			coverage_set.first[i].first.push_back(cost);
+			if (cost > input.maxFuelCost[nodes_set.set_id])
 			{
+				input.maxFuelCost[nodes_set.set_id] = cost;
+				input.constM[nodes_set.set_id] = input.getRobotFuel(robotID) + input.maxFuelCost[nodes_set.set_id];
+			}
+		}
+	}
 
-				// 🔴 ASSERT 7 — índice j válido
-            	assert(nodes[j] >= 0);
-          	  	assert(nodes[j] < graph.size());
+	min_fuel.clear();
+	set_min_fuel_2_depot();
+}
 
-				cost = getFlightTime(graph[nodes[i]][nodes[j]], input.getRobotVel(robotID));
-
-				// 🔴 ASSERT 8 — custo válido
-    			assert(std::isfinite(cost));
-            	assert(cost >= 0.0);
-
-				coverage_set.first[i].first.push_back(cost);
-				if (cost > input.maxFuelCost[nodes_set.set_id])
+// contabiliza a identidade de cada nó (target ou depot).
+// utilizamos os índices (index) de cada nós, armazenado em nGraphs[k].first[i].second para acessar a identificação.
+void Graph::setGraphInfo()
+{
+	if (!nGraphs.empty())
+	{
+		int index = 0;
+		for (unsigned int k = 0; k < nGraphs.size(); k++)
+		{
+			for (unsigned int i = 0; i < nGraphs[k].first.size(); ++i)
+			{
+				index = nGraphs[k].first[i].second;
+				if (input.nodes[index].getNodeType().compare("base") == 0 || input.nodes[index].getNodeType().compare("depot") == 0)
+					nGraphs[k].second.D++;
+				else if (input.nodes[index].getNodeType().compare("target") == 0)
 				{
-					input.maxFuelCost[nodes_set.set_id] = cost;
-					input.constM[nodes_set.set_id] = input.getRobotFuel(robotID) + input.maxFuelCost[nodes_set.set_id];
+					nGraphs[k].second.T++;
 				}
 			}
 		}
-
-		min_fuel.clear();
-		set_min_fuel_2_depot();
 	}
+}
 
-	// contabiliza a identidade de cada nó (target ou depot).
-	// utilizamos os índices (index) de cada nós, armazenado em nGraphs[k].first[i].second para acessar a identificação.
-	void Graph::setGraphInfo()
+// calcula o tempo de voo
+double Graph::getFlightTime(double distance, double vel)
+{
+	return static_cast<double>(distance) / static_cast<double>(vel);
+}
+
+void Graph::swapCLine(uint k1, uint k2, int l1, int l2)
+{
+	int lTemp = -1;
+
+	lTemp = nodesSets[k1].cvLines[l1];
+	nodesSets[k1].cvLines[l1] = nodesSets[k2].cvLines[l2];
+	// verificar a necessidade de atualizar o subset de k1, caso tenha
+	UpdateSubSet(k1);
+
+	nodesSets[k2].cvLines[l2] = lTemp;
+	// verificar a necessidade de atualizar o subset de k2, caso tenha
+	UpdateSubSet(k2);
+}
+
+// remove a linha iLine de k1 e a insere em k2
+void Graph::shiftCLine(uint k1, uint k2, uint iLine)
+{
+	int line = nodesSets[k1].cvLines[iLine];
+
+	nodesSets[k2].cvLines.push_back(line);
+	// verificar a necessidade de atualizar o subset de k1, caso tenha
+	UpdateSubSet(k2);
+
+	uint nodeBefore = nodesSets[k1].cvLines.size();
+	nodesSets[k1].cvLines.erase(nodesSets[k1].cvLines.begin() + iLine);
+	// verificar a necessidade de atualizar o subset de k1, caso tenha
+
+	// cout << "sizeNodeset before: " << nodeBefore << " index line: " << iLine << " line removed: " << line <<endl;
+	// cout << "sizeNodeset after: " << nodesSets[k1].cvLines.size() <<endl;
+
+	if (nodeBefore != nodesSets[k1].cvLines.size() + 1)
+		std::cout << "problema shiftCline" << std::endl;
+
+	UpdateSubSet(k1);
+}
+
+void Graph::removeCLine(uint k1, uint iLine)
+{
+	nodesSets[k1].cvLines.erase(nodesSets[k1].cvLines.begin() + iLine);
+	UpdateSubSet(k1);
+}
+
+// backup data sets of coverage lines and matrix of costs
+void Graph::copyNSets()
+{
+	// set back up  of costs coverage Sets
+	coverageSets_Bckup.clear();
+	coverageSets_Bckup = coverageSets;
+
+	// set the back up of nodes lines
+	nodesSets_Bckup.clear();
+	nodesSets_Bckup = nodesSets;
+
+	// set backup of the robot to group map
+	mapRobotGroup_Bckup = mapRobotGroup;
+	mapGroupRobot_Bckup = mapGroupRobot;
+}
+
+// restore coverage  and nodes sets
+void Graph::restoreNSets()
+{
+	coverageSets.clear();
+	coverageSets = coverageSets_Bckup;
+	nodesSets.clear();
+	nodesSets = nodesSets_Bckup;
+	mapRobotGroup = mapRobotGroup_Bckup;
+	mapGroupRobot = mapGroupRobot_Bckup;
+}
+
+// retorna o custo para ir de x a y no grafo k
+double Graph::getCost(unsigned int k, unsigned int x, unsigned int y)
+{
+	double cost = 0;
+	// se o índice k é um grupo válido
+	if (k < coverageSets.size())
 	{
-		if (!nGraphs.empty())
-		{
-			int index = 0;
-			for (unsigned int k = 0; k < nGraphs.size(); k++)
-			{
-				for (unsigned int i = 0; i < nGraphs[k].first.size(); ++i)
-				{
-					index = nGraphs[k].first[i].second;
-					if (input.nodes[index].getNodeType().compare("base") == 0 || input.nodes[index].getNodeType().compare("depot") == 0)
-						nGraphs[k].second.D++;
-					else if (input.nodes[index].getNodeType().compare("target") == 0)
-					{
-						nGraphs[k].second.T++;
-					}
-				}
-			}
-		}
-	}
-
-	// calcula o tempo de voo
-	double Graph::getFlightTime(double distance, double vel)
-	{
-		return static_cast<double>(distance) / static_cast<double>(vel);
-	}
-
-	void Graph::swapCLine(uint k1, uint k2, int l1, int l2)
-	{
-		int lTemp = -1;
-
-		lTemp = nodesSets[k1].cvLines[l1];
-		nodesSets[k1].cvLines[l1] = nodesSets[k2].cvLines[l2];
-		// verificar a necessidade de atualizar o subset de k1, caso tenha
-		UpdateSubSet(k1);
-
-		nodesSets[k2].cvLines[l2] = lTemp;
-		// verificar a necessidade de atualizar o subset de k2, caso tenha
-		UpdateSubSet(k2);
-	}
-
-	// remove a linha iLine de k1 e a insere em k2
-	void Graph::shiftCLine(uint k1, uint k2, uint iLine)
-	{
-		int line = nodesSets[k1].cvLines[iLine];
-
-		nodesSets[k2].cvLines.push_back(line);
-		// verificar a necessidade de atualizar o subset de k1, caso tenha
-		UpdateSubSet(k2);
-
-		uint nodeBefore = nodesSets[k1].cvLines.size();
-		nodesSets[k1].cvLines.erase(nodesSets[k1].cvLines.begin() + iLine);
-		// verificar a necessidade de atualizar o subset de k1, caso tenha
-
-		// cout << "sizeNodeset before: " << nodeBefore << " index line: " << iLine << " line removed: " << line <<endl;
-		// cout << "sizeNodeset after: " << nodesSets[k1].cvLines.size() <<endl;
-
-		if (nodeBefore != nodesSets[k1].cvLines.size() + 1)
-			std::cout << "problema shiftCline" << std::endl;
-
-		UpdateSubSet(k1);
-	}
-
-	void Graph::removeCLine(uint k1, uint iLine)
-	{
-		nodesSets[k1].cvLines.erase(nodesSets[k1].cvLines.begin() + iLine);
-		UpdateSubSet(k1);
-	}
-
-	// backup data sets of coverage lines and matrix of costs
-	void Graph::copyNSets()
-	{
-		// set back up  of costs coverage Sets
-		coverageSets_Bckup.clear();
-		coverageSets_Bckup = coverageSets;
-
-		// set the back up of nodes lines
-		nodesSets_Bckup.clear();
-		nodesSets_Bckup = nodesSets;
-
-		// set backup of the robot to group map
-		mapRobotGroup_Bckup = mapRobotGroup;
-		mapGroupRobot_Bckup = mapGroupRobot;
-	}
-
-	// restore coverage  and nodes sets
-	void Graph::restoreNSets()
-	{
-		coverageSets.clear();
-		coverageSets = coverageSets_Bckup;
-		nodesSets.clear();
-		nodesSets = nodesSets_Bckup;
-		mapRobotGroup = mapRobotGroup_Bckup;
-		mapGroupRobot = mapGroupRobot_Bckup;
-	}
-
-	// retorna o custo para ir de x a y no grafo k
-	double Graph::getCost(unsigned int k, unsigned int x, unsigned int y)
-	{
-		double cost = 0;
-		// se o índice k é um grupo válido
-		if (k < coverageSets.size())
-		{
-
-			uint minID, maxID = 0;
-			minID = std::min(x, y);
-			maxID = std::max(x, y);
-
-			if (minID < coverageSets[k].first.size() && maxID < coverageSets[k].first.size())
-			{
-				cost = (coverageSets[k].first[minID].first[maxID - minID]);
-			}
-		}
-		return cost;
-	}
-
-	// retorna o custo para ir de x a y no grafo k
-	double Graph::getCost(unsigned int x, unsigned int y)
-	{
-		double cost = 0;
-		// se o índice k é um grupo válido
 
 		uint minID, maxID = 0;
-
 		minID = std::min(x, y);
 		maxID = std::max(x, y);
 
-		if (minID < coverage_set.first.size() && maxID < coverage_set.first.size())
+		if (minID < coverageSets[k].first.size() && maxID < coverageSets[k].first.size())
 		{
-			cost = (coverage_set.first[minID].first[maxID - minID]);
+			cost = (coverageSets[k].first[minID].first[maxID - minID]);
 		}
+	}
+	return cost;
+}
 
-		return cost;
+// retorna o custo para ir de x a y no grafo k
+double Graph::getCost(unsigned int x, unsigned int y)
+{
+	double cost = 0;
+
+	uint minID = std::min(x, y);
+	uint maxID = std::max(x, y);
+
+	if (minID < coverage_set.first.size() &&
+		maxID < coverage_set.first.size())
+	{
+		uint innerIdx = maxID - minID;
+
+		// verifica tamanho do vetor interno
+		assert(innerIdx < coverage_set.first[minID].first.size() &&
+			   "getCost: acesso fora do bounds no vetor interno");
+
+		cost = coverage_set.first[minID].first[innerIdx];
+	}
+	else
+	{
+		std::cerr << "[getCost] ERRO: índices fora do bounds! "
+				  << "x=" << x << " y=" << y
+				  << " size=" << coverage_set.first.size() << std::endl;
 	}
 
-	// get a node id. This id is assigned for the initial global graph.
-	// This keep a possible to get a original reference to the node.
-	int Graph::getIndex(int k, int i)
-	{
-		return coverageSets[k].first[i].second;
+	return cost;
+}
+
+// get a node id. This id is assigned for the initial global graph.
+// This keep a possible to get a original reference to the node.
+int Graph::getIndex(int k, int i)
+{
+	return coverageSets[k].first[i].second;
+}
+
+// get a node id. This id is assigned for the initial global graph.
+// This keep a possible to get a original reference to the node.
+/*int Graph::getIndex(int i)
+{
+	auto it = indexToNodeId.find(i);
+	int test_id = coverage_set.first[i].second;
+	if (it != indexToNodeId.end()){
+		if(test_id != it->second)
+			cout << "Problema nos indices !\n";
+
+		return it->second;
 	}
-
-	// get a node id. This id is assigned for the initial global graph.
-	// This keep a possible to get a original reference to the node.
-	/*int Graph::getIndex(int i)
+	else
 	{
-		auto it = indexToNodeId.find(i);
-		int test_id = coverage_set.first[i].second;
-		if (it != indexToNodeId.end()){
-			if(test_id != it->second)
-				cout << "Problema nos indices !\n";
-
-			return it->second;
-		}	
-		else
-		{
-			std::cerr << "Erro: índice " << i << " não encontrado em indexToNodeId.\n";
-			return -1; // ou lançar uma exceção se preferir
-		}
-	}*/
-
-	int Graph::getIndex(int i)
-	{
-		return coverage_set.first[i].second;
+		std::cerr << "Erro: índice " << i << " não encontrado em indexToNodeId.\n";
+		return -1; // ou lançar uma exceção se preferir
 	}
-	
-	
+}*/
 
+int Graph::getIndex(int i)
+{
+	return coverage_set.first[i].second;
+}
 
 // get a coverrage line id. This id is assigned for the input node.
 // This keep a possible to get a original reference to the node.

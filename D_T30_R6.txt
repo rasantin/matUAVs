@@ -33,6 +33,9 @@ Base_1@3400 -50
 6375 1358.324
 6375 9945.316
 
+@blocked_edges
+2 2
+
 @robots_configuration
 configId:Config_3
 maxVel:15

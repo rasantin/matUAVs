@@ -36,6 +36,10 @@ Base_1@3400 -50
 @blocked_edges
 2 2
 
+@detour
+
+1 2 45.78
+
 @robots_configuration
 configId:Config_3
 maxVel:15
@@ -79,6 +83,6 @@ Robot_5@Base_1
 Robot_6@Base_1
 
 @param
-nexec:200
+nexec:15
 n:50
 cvl_subset:5

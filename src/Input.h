@@ -19,8 +19,7 @@
 #include <map>
 #include <cmath>
 #include <set>
-
-
+#include <unordered_map>
 class Input {
 
 private:
@@ -51,6 +50,7 @@ private:
 	std::string file_name;
 
 	std::set<std::pair<int,int>> blocked_edges;
+	std:: unordered_map<int,std::unordered_map<int,double>> detourCosts;
 
 
 
@@ -111,10 +111,9 @@ public:
 	const std::set<std::pair<int,int>>& getBlockedEdges() const;
 
 	bool isBlockedEdge(int u, int v) const;
+	double getDetourCost(int u, int v) const;
+	bool hasDetourCost(int u, int v) const;	
 
-
-
-  
 
 	virtual ~Input();
 };

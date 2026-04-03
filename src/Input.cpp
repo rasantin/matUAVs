@@ -77,6 +77,12 @@ void Input::readFile(std::string fileName)
 				sectionType = "depot";
 				continue;
 			}
+
+			else if (line.compare("@detour") == 0)
+			{
+				sectionType = "detour";
+				continue;
+			}
 			
 			else if (line.compare("@blocked_edges") == 0)
 			{
@@ -199,6 +205,25 @@ void Input::readFile(std::string fileName)
 					catch (const std::invalid_argument &e)
 					{
 						std::cerr << " The function stod() could not convert the arguments " << line << " to <double, double> " << '\n';
+					}
+				}
+
+				else if (sectionType.compare("detour") == 0)
+				{
+					try
+					{
+						int t1 = std::stoi(line, &sz);
+						line = line.substr(sz);
+						int t2 = std::stoi(line, &sz);
+						line = line.substr(sz);
+						double detourCost = std::stod(line);
+						if(t1 > t2) std::swap(t1, t2);
+
+						detourCosts[t1][t2] = detourCost;
+					}
+					catch (const std::invalid_argument &e)
+					{
+						std::cerr << " Error parsing detour line: " << line << '\n';
 					}
 				}
 				
@@ -753,3 +778,21 @@ bool Input::isBlockedEdge(int u, int v) const
            blocked_edges.count({v,u}) > 0;
 }
 
+bool Input::hasDetourCost(int u, int v) const
+{
+	if(u > v) std::swap(u, v);
+	auto it = detourCosts.find(u);
+	return it != detourCosts.end() && it->second.find(v) != it->second.end();
+}
+
+double Input::getDetourCost(int u, int v) const
+{
+	if(u > v) std::swap(u, v);
+	auto it = detourCosts.find(u);
+	if (it != detourCosts.end()) {
+		auto inner_it = it->second.find(v);
+		if (inner_it != it->second.end()) {
+			return inner_it->second;
+		}
+	}
+}

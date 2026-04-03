@@ -173,9 +173,6 @@ public:
 
 		nodesSets.clear();
 
-	
-
-
 		std::vector<Set> sets = splitHGraph();
 
 		input.maxFuelCost.resize(input.getRobotNum());

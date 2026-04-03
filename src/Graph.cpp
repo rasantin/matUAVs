@@ -80,7 +80,16 @@ void Graph::buildGraph()
 		{
 			int i = n1.getNodeId();
 			int j = n2.getNodeId();
-			graph[i][j] = input.getDistance(n1, n2);
+
+			if(i > j)
+				continue; // Evitar calcular duas vezes a mesma aresta
+
+
+			double detourCost =  input.hasDetourCost(i, j) ? input.getDetourCost(i, j) : 0.0;
+			double cost = input.getDistance(n1, n2) + detourCost;
+
+			graph[i][j] = cost;
+			graph[j][i] = cost; // Grafo não direcionado
 		}
 	}
 

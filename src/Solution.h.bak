@@ -27,7 +27,6 @@
 
 #include <optional>
 
-
 	// Functor para permitir unordered_map com std::pair<int, int> como chave
 	struct pair_hash
 	{
@@ -86,8 +85,6 @@
 		Rand rand;
 		path bestPath(SolverContext& ctx,int gID);
 		path milpSolver(SolverContext& ctx, const Set& coverage_set, const path& initial_sol = path());
-		path milpSolverSafe(SolverContext &ctx, const Set &nodes_set, const path &initial_sol = path());
-
 		path improvePath(SolverContext& ctx, path p);
 
 		path removeCL(path p, int cl);
@@ -97,17 +94,17 @@
 
 		std::pair<path, std::string> bestInsertionCL(path p, int cl);
 
-		std::pair<int, int> getCLDirection(const path& p, int cl);
+		std::pair<int, int> getCLDirection(path p, int cl);
 
 		std::vector<edge> GetEdgesCosts(std::vector<std::pair<int, int>> path, int RobotID);
 
 		path AdjustRefuelingFromNode(std::vector<edge> path_cost, path p, int node);
 		path AdjustPathRefueling(std::vector<edge> path_costs, path p);
 
-		path GetPathFromBaseToNewCL(const path& p, int pos);
+		path GetPathFromBaseToNewCL(path p, int pos);
 		path GetPathFromNodeAToNodeB(path p, int node_a, int node_b);
 		path GetPathFromNewCLToBase(path p, int pos);
-		path GetPathFromEdgeToNextDepot(const path& p, edge e);
+		path GetPathFromEdgeToNextDepot(path p, edge e);
 		path GetInvPathFromNewCLToBase(path p, int pos);
 		path GetInvPath(path p);
 
@@ -132,10 +129,10 @@
 		path Link_Sets_Node_out_in(path p, int out, int in);
 		bool IsCircuit(path p);
 
-		edge GetNextCL(const path& p, int pos);
+		edge GetNextCL(path p, int pos);
 
 		int GetNearOpenedDepot(path p, int node_id);
-		path GetSPTOverOpenDepots(const path& p, int node_start, int node_goal);
+		path GetSPTOverOpenDepots(path p, int node_start, int node_goal);
 
 		void testeInvWalk(path p);
 		path insertCLTest(path p, int from, int to);
@@ -200,8 +197,6 @@
 			double pred_time_g1;
 			double pred_time_g2;
 		};
-
-
 
 		std::vector<pred> vec_predictions;
 

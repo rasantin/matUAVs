@@ -44,6 +44,8 @@ private:
 	std::vector<int> nodesDepotsIndexes;
 	std::vector<int> nodesTargetsIndexes;
 	std::map<int,int> mapTargetDepot;
+	std::map<int,int> mapDepotTarget;
+
 	
 	void nodesIndexes();
 
@@ -91,6 +93,7 @@ public:
 	Node getNode(int node);
 
 	int getDepotIdOnTarget(int id);
+	int getTargetIdFromDepot(int depotId);
 	bool isTarget(int id);
 	std::string getRobotConfigName(int k);
 

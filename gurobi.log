@@ -1,0 +1,8 @@
+
+Gurobi 12.0.2 (linux64, gurobi_cl) logging started Sun Apr 12 21:23:39 2026
+
+Set parameter WLSAccessID
+Set parameter WLSSecret
+Set parameter LicenseID to value 2763500
+Set parameter LogFile to value "gurobi.log"
+Using license file /home/rsantin/gurobi.lic

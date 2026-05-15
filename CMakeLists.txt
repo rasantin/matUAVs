@@ -37,9 +37,9 @@ endif()
 # ===============================
 if(NOT DEFINED ENV{GUROBI_HOME})
     if(WIN32)
-        set(ENV{GUROBI_HOME} "C:/gurobi1202/win64")
+        set(ENV{GUROBI_HOME} "C:/gurobi1302/win64")
     else()
-        set(ENV{GUROBI_HOME} "/opt/gurobi1202/linux64")
+        set(ENV{GUROBI_HOME} "/opt/gurobi1302/linux64")
     endif()
 endif()
 
@@ -57,7 +57,7 @@ if(WIN32)
         REQUIRED
     )
     find_library(GUROBI_LIBRARY
-        NAMES gurobi120
+        NAMES gurobi130
         PATHS ${GUROBI_DIR}/lib
         REQUIRED
     )
@@ -68,7 +68,7 @@ else()
         REQUIRED
     )
     find_library(GUROBI_LIBRARY
-        NAMES gurobi120
+        NAMES gurobi130
         PATHS ${GUROBI_DIR}/lib
         REQUIRED
     )

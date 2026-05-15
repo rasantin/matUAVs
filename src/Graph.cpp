@@ -52,6 +52,18 @@ void Graph::buildGraph()
 	// Criar a matriz NxN
 	graph.resize(vertices, std::vector<double>(vertices, 0.0));
 
+	// VERIFICAÇÃO TEMPORÁRIA
+	for (const Node &n : input.nodes)
+	{
+		int id = n.getNodeId();
+		if (id < 0 || (unsigned int)id >= vertices)
+		{
+			std::cerr << "[BUG] Node ID " << id << " fora dos limites do graph (size=" << vertices << ")\n";
+			std::cerr << "      Node type: " << n.getNodeType() << " x=" << n.getX() << " y=" << n.getY() << "\n";
+			std::abort();
+		}
+	}
+
 	int index_n1 = 0;
 	for (const Node &n1 : input.nodes)
 	{
@@ -81,11 +93,23 @@ void Graph::buildGraph()
 			int i = n1.getNodeId();
 			int j = n2.getNodeId();
 
-			if(i > j)
+			if (i > j)
 				continue; // Evitar calcular duas vezes a mesma aresta
 
+			int u = i;
+			int v = j;
 
-			double detourCost =  input.hasDetourCost(i, j) ? input.getDetourCost(i, j) : 0.0;
+			if (!input.isTarget(i))
+				u = input.getTargetIdFromDepot(i);
+
+			if (!input.isTarget(j))
+				v = input.getTargetIdFromDepot(j);
+
+			double detourCost = 0.0;
+
+			if (u != v && input.hasDetourCost(u, v))
+				detourCost = input.getDetourCost(u, v);
+
 			double cost = input.getDistance(n1, n2) + detourCost;
 
 			graph[i][j] = cost;
@@ -3273,48 +3297,49 @@ void Graph::Convert_NS_to_CS(Set nodes_set)
 
 	// calculate new  costs, maxFuel and  constM to k1
 	// atribuir as distância entre todos os nós
+	coverage_set.first.resize(nodes.size());
+
 	for (uint i = 0; i < nodes.size(); i++)
 	{
-
-		// 🔴 ASSERT 5 — índice i válido
-		assert(i < nodes.size());
 		assert(nodes[i] >= 0);
 		assert(nodes[i] < graph.size());
 
-		// atribui valor máximo para o identificado do menor combustível
-		// para atingir algum posto
-		// inicializa o par vetor de distância e id do nó.
-		coverage_set.first.push_back(std::pair<std::vector<double>, int>());
-
-		// inserir o indice id do nó em cada pair <vetor, inteiro>. Nesse caso, o vetor armazena
-		//  as distância do nó id aos outro nós.
 		coverage_set.first[i].second = nodes[i];
 
-		// criar o map para obter do indice do grafo o indice do coverage_set
-		// 🔴 ASSERT 6 — map consistente
+		//  cria linha COMPLETA
+		coverage_set.first[i].first.resize(nodes.size());
+
 		auto [it, inserted] =
 			map_cvset_id_to_node_id.emplace(nodes[i], i);
-		assert(inserted); // garantir que a inserção foi realizada com sucesso
 
-		// inserir o custo do node[i] (identificador) a todos os outros nodes no vetor
-		for (uint j = i; j < nodes.size(); j++)
+		if (!inserted)
 		{
+			std::cerr << "Erro: nó duplicado em coverage_set: " << nodes[i] << std::endl;
+			exit(1);
+		}
 
-			// 🔴 ASSERT 7 — índice j válido
+		for (uint j = 0; j < nodes.size(); j++) // 🔥 MUDANÇA AQUI
+		{
 			assert(nodes[j] >= 0);
 			assert(nodes[j] < graph.size());
 
-			cost = getFlightTime(graph[nodes[i]][nodes[j]], input.getRobotVel(robotID));
+			cost = getFlightTime(
+				graph[nodes[i]][nodes[j]],
+				input.getRobotVel(robotID));
 
-			// 🔴 ASSERT 8 — custo válido
-			assert(std::isfinite(cost));
-			assert(cost >= 0.0);
+			if (!std::isfinite(cost) || cost < 0.0)
+			{
+				std::cerr << "Erro: custo inválido i=" << i << " j=" << j << std::endl;
+				exit(1);
+			}
 
-			coverage_set.first[i].first.push_back(cost);
+			coverage_set.first[i].first[j] = cost;
+
 			if (cost > input.maxFuelCost[nodes_set.set_id])
 			{
 				input.maxFuelCost[nodes_set.set_id] = cost;
-				input.constM[nodes_set.set_id] = input.getRobotFuel(robotID) + input.maxFuelCost[nodes_set.set_id];
+				input.constM[nodes_set.set_id] =
+					input.getRobotFuel(robotID) + input.maxFuelCost[nodes_set.set_id];
 			}
 		}
 	}
@@ -3442,7 +3467,7 @@ double Graph::getCost(unsigned int k, unsigned int x, unsigned int y)
 }
 
 // retorna o custo para ir de x a y no grafo k
-double Graph::getCost(unsigned int x, unsigned int y)
+/*double Graph::getCost(unsigned int x, unsigned int y)
 {
 	double cost = 0;
 
@@ -3468,6 +3493,49 @@ double Graph::getCost(unsigned int x, unsigned int y)
 	}
 
 	return cost;
+}*/
+
+
+// Retorna o custo para ir do nó x ao nó y no coverage_set atual.
+// Agora assume MATRIZ COMPLETA NxN (não mais triangular).
+double Graph::getCost(unsigned int x, unsigned int y)
+{
+    // =============================
+    // 🔴 Validação de limites externos
+    // =============================
+    if (x >= coverage_set.first.size() || y >= coverage_set.first.size())
+    {
+        std::cerr << "[getCost] ERRO: índice fora do bounds! "
+                  << "x=" << x << " y=" << y
+                  << " size=" << coverage_set.first.size() << std::endl;
+        abort(); // falha imediata — evita corrupção silenciosa
+    }
+
+    // =============================
+    // 🔴 Validação da linha interna
+    // =============================
+    if (y >= coverage_set.first[x].first.size())
+    {
+        std::cerr << "[getCost] ERRO: índice interno fora do bounds! "
+                  << "x=" << x << " y=" << y
+                  << " row_size=" << coverage_set.first[x].first.size() << std::endl;
+        abort();
+    }
+
+    double cost = coverage_set.first[x].first[y];
+
+    // =============================
+    // 🔴 Validação numérica
+    // =============================
+    if (!std::isfinite(cost) || cost < 0.0)
+    {
+        std::cerr << "[getCost] ERRO: custo inválido! "
+                  << "x=" << x << " y=" << y
+                  << " cost=" << cost << std::endl;
+        abort();
+    }
+
+    return cost;
 }
 
 // get a node id. This id is assigned for the initial global graph.
@@ -3498,6 +3566,13 @@ int Graph::getIndex(int k, int i)
 
 int Graph::getIndex(int i)
 {
+
+	if (i < 0 || (size_t)i >= coverage_set.first.size())
+	{
+		std::cerr << "[BUG] getIndex fora dos limites: i=" << i
+				  << " size=" << coverage_set.first.size() << "\n";
+		return -1;
+	}
 	return coverage_set.first[i].second;
 }
 
@@ -3738,7 +3813,7 @@ bool Graph::IsCLine(int node1, int node2)
 	return min_fuel;
 }*/
 
-void Graph::set_min_fuel_2_depot()
+/*void Graph::set_min_fuel_2_depot()
 {
 	int n_depots = getDepotNum();
 	int n_targets = getTargetNum();
@@ -3756,6 +3831,81 @@ void Graph::set_min_fuel_2_depot()
 		}
 		min_fuel.emplace(i, min_f);
 	}
+}*/
+
+void Graph::set_min_fuel_2_depot()
+{
+    int n_depots  = getDepotNum();
+    int n_targets = getTargetNum();
+    int n_nodes   = n_depots + n_targets;
+
+    int n_nodes_real = coverage_set.first.size();
+
+    // =============================
+    // 🔴 Validação estrutural global
+    // =============================
+    if (n_nodes_real == 0)
+    {
+        std::cerr << "Erro: coverage_set vazio\n";
+        abort();
+    }
+
+    if (n_nodes_real != n_nodes)
+    {
+        std::cerr << "Erro: inconsistencia n_nodes\n";
+        abort();
+    }
+
+    if (n_depots == 0)
+    {
+        std::cerr << "Erro: nenhum depot\n";
+        abort();
+    }
+
+    // 🔴 valida matriz NxN completa
+    for (int i = 0; i < n_nodes; ++i)
+    {
+        if (coverage_set.first[i].first.size() != (size_t)n_nodes)
+        {
+            std::cerr << "Erro: linha " << i << " não é NxN\n";
+            abort();
+        }
+    }
+
+    min_fuel.clear();
+
+    // =============================
+    // 🔴 Cálculo principal
+    // =============================
+    for (int i = n_depots; i < n_nodes; ++i)
+    {
+        double min_f = std::numeric_limits<double>::max();
+
+        for (int j = 0; j < n_depots; j++)
+        {
+            double fuel = getCost(i, j);
+
+            if (!std::isfinite(fuel) || fuel < 0.0)
+            {
+                std::cerr << "Erro custo invalido i=" << i << " j=" << j
+                          << " fuel=" << fuel << std::endl;
+                abort();
+            }
+
+            if (fuel < min_f)
+                min_f = fuel;
+        }
+
+        // 🔴 Garantia de existência de solução válida
+        if (min_f == std::numeric_limits<double>::max())
+        {
+            std::cerr << "Erro: target " << i
+                      << " não alcança nenhum depot\n";
+            abort();
+        }
+
+        min_fuel[i] = min_f;
+    }
 }
 
 double Graph::get_min_fuel_2_depot(int i)

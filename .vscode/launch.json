@@ -17,7 +17,7 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/build/bin/matUAVs",
-      "args": ["D_T30_R6.txt"],
+      "args": ["D_T30_R6_preprocessing.txt"],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}",
       "environment": [],

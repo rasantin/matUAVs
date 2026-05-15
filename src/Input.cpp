@@ -542,6 +542,7 @@ void Input::insertDepotsOnTargets()
 		n = getNode(t);
 		depotId = insertNodes(n.getX(), n.getY(), "depot");
 		mapTargetDepot.insert(std::pair<int, int>(t, depotId));
+		mapDepotTarget.insert(std::pair<int, int>(depotId, t));
 	}
 
 }
@@ -550,6 +551,15 @@ int Input::getDepotIdOnTarget(int id)
 {
 	auto it = mapTargetDepot.find(id);
 	if(it != mapTargetDepot.end()){
+		return it->second;
+	}
+	return -1;
+}
+
+int Input::getTargetIdFromDepot(int depotId)
+{
+	auto it = mapDepotTarget.find(depotId);
+	if(it != mapDepotTarget.end()){
 		return it->second;
 	}
 	return -1;
@@ -781,6 +791,10 @@ bool Input::isBlockedEdge(int u, int v) const
 bool Input::hasDetourCost(int u, int v) const
 {
 	if(u > v) std::swap(u, v);
+
+	//int i = getDepotIdOnTarget(u);
+	//int j = getDepotIdOnTarget(v);
+
 	auto it = detourCosts.find(u);
 	return it != detourCosts.end() && it->second.find(v) != it->second.end();
 }

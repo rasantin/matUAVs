@@ -217,8 +217,6 @@ public:
 
 	int getNNodes(int k);
 
-	int getIndex(int k, int i);
-
 	int getIndex(int i);
 
 	int getCVLIndex(int k, int i);

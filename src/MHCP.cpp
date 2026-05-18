@@ -78,6 +78,9 @@ int main(int argc, char **argv)
 	//Output output(input); desabilitado para debugar 14/05/26
 
 	int cvl_subset_num = input.getMaxCVLSubSet();
+	
+	auto solverCtx = std::make_unique<SolverContext>();
+
 
 	while (exec <= input.getNExec())
 	{
@@ -86,11 +89,9 @@ int main(int argc, char **argv)
 		m = 1;
 		//output.createOutput(datetime());desabilitado para debugar 14/05/26
 
-		SolverContext solverCtx; // inicializa contexto do solver Gurobi
-
 		// Construtor de Solution: inicializa best_sol, atualiza depósitos globais,
 		// verifica Pareto e prepara o objeto para o VNS, passando SolverContext para solver Gurobi
-		Solution s(solverCtx, input, cvl_subset_num);
+		Solution s(*solverCtx, input, cvl_subset_num);
 
 		s.best_prediction = best_prediction;
 
@@ -102,7 +103,7 @@ int main(int argc, char **argv)
 		std::cout << "[EXEC " << exec << "] HasSolutionNotVisited = "
 				  << s.HasSolutionNotVisited()
 				  << ", targetsNum = " << targetsNum << std::endl;
-		while (s.HasSolutionNotVisited() && m <= targetsNum)
+		/*while (s.HasSolutionNotVisited() && m <= targetsNum)
 		{
 
 			s.currentSol = s.best_sol;
@@ -122,35 +123,7 @@ int main(int argc, char **argv)
 				// s.printSol(s.currentSol);
 				// cout << "Vector of Solutions:" << s.vecSol.size() <<endl;
 				// start_op = std::chrono::system_clock::now();
-				/*if (s.shift())
-				{
-					// end_op= std::chrono::system_clock::now();
-					// elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds> (end_op-start_op).count();
-					// cout << " time:" <<elapsed_seconds <<"segundos" <<endl;
-					continue;
-				}*/
-				// end_op= std::chrono::system_clock::now();
-				// elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds> (end_op-start_op).count();
-				// cout << " time:" <<elapsed_seconds <<"segundos" <<endl;
-
-				// s.printSol(s.currentSol);
-				// cout << "Vector of Solutions:" << s.vecSol.size() <<endl;
-				// start_op = std::chrono::system_clock::now();
-				/*if (s.swap(&s.currentSol))
-				{
-					// end_op= std::chrono::system_clock::now();
-					// elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds> (end_op-start_op).count();
-					// cout << " time:" <<elapsed_seconds <<"segundos" <<endl;
-					continue;
-				}*/
-				// end_op= std::chrono::system_clock::now();
-				// elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds> (end_op-start_op).count();
-				// cout << " time:" <<elapsed_seconds <<"segundos" <<endl;
-
-				// s.printSol(s.currentSol);
-				// cout << "Vector of Solutions:" << s.vecSol.size() <<endl;
-				// start_op = std::chrono::system_clock::now();
-				if (s.improveSol(solverCtx, &s.currentSol))
+				if (s.shift())
 				{
 					// end_op= std::chrono::system_clock::now();
 					// elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds> (end_op-start_op).count();
@@ -164,13 +137,13 @@ int main(int argc, char **argv)
 				// s.printSol(s.currentSol);
 				// cout << "Vector of Solutions:" << s.vecSol.size() <<endl;
 				// start_op = std::chrono::system_clock::now();
-				/*if (s.swapRobots(&s.currentSol))
+				if (s.swap(&s.currentSol))
 				{
 					// end_op= std::chrono::system_clock::now();
 					// elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds> (end_op-start_op).count();
 					// cout << " time:" <<elapsed_seconds <<"segundos" <<endl;
 					continue;
-				}*/
+				}
 				// end_op= std::chrono::system_clock::now();
 				// elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds> (end_op-start_op).count();
 				// cout << " time:" <<elapsed_seconds <<"segundos" <<endl;
@@ -178,20 +151,48 @@ int main(int argc, char **argv)
 				// s.printSol(s.currentSol);
 				// cout << "Vector of Solutions:" << s.vecSol.size() <<endl;
 				// start_op = std::chrono::system_clock::now();
-				/*if (s.closeRandomDepot(&s.currentSol))
+				if (s.improveSol(*solverCtx, &s.currentSol))
 				{
 					// end_op= std::chrono::system_clock::now();
 					// elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds> (end_op-start_op).count();
 					// cout << " time:" <<elapsed_seconds <<"segundos" <<endl;
 					continue;
-				}*/
+				}
+				// end_op= std::chrono::system_clock::now();
+				// elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds> (end_op-start_op).count();
+				// cout << " time:" <<elapsed_seconds <<"segundos" <<endl;
+
+				// s.printSol(s.currentSol);
+				// cout << "Vector of Solutions:" << s.vecSol.size() <<endl;
+				// start_op = std::chrono::system_clock::now();
+				if (s.swapRobots(&s.currentSol))
+				{
+					// end_op= std::chrono::system_clock::now();
+					// elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds> (end_op-start_op).count();
+					// cout << " time:" <<elapsed_seconds <<"segundos" <<endl;
+					continue;
+				}
+				// end_op= std::chrono::system_clock::now();
+				// elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds> (end_op-start_op).count();
+				// cout << " time:" <<elapsed_seconds <<"segundos" <<endl;
+
+				// s.printSol(s.currentSol);
+				// cout << "Vector of Solutions:" << s.vecSol.size() <<endl;
+				// start_op = std::chrono::system_clock::now();
+				if (s.closeRandomDepot(&s.currentSol))
+				{
+					// end_op= std::chrono::system_clock::now();
+					// elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds> (end_op-start_op).count();
+					// cout << " time:" <<elapsed_seconds <<"segundos" <<endl;
+					continue;
+				}
 
 				// end_op= std::chrono::system_clock::now();
 				// elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds> (end_op-start_op).count();
 				// cout << " time:" <<elapsed_seconds <<"segundos" <<endl;
 
 				// if an improvement is obtained, the new incumbent is updated
-				/*if (s.IsBetterSol(s.currentSol, s.best_sol))
+				if (s.IsBetterSol(s.currentSol, s.best_sol))
 					s.best_sol = s.currentSol;
 
 				else
@@ -199,7 +200,7 @@ int main(int argc, char **argv)
 					s.currentSol = s.best_sol;
 					// update nodesSet;
 					s.solutionToNodesSet(s.best_sol);
-				}desabilitado para debugar 14/05/26*/
+				}
 
 				// s.printSol(s.currentSol);
 				// cout << "Vector of Solutions:" << s.vecSol.size() <<endl;
@@ -212,14 +213,14 @@ int main(int argc, char **argv)
 				n++;
 			}
 			cout << endl;
-			//s.eval_VecSol();desabilitado para debugar 14/05/26
-			//s.print_paretoSet();desabilitado para debugar 14/05/26
+			s.eval_VecSol();
+			s.print_paretoSet();
 			
-			/*if (s.HasSolutionNotVisited())
+			if (s.HasSolutionNotVisited())
 			{
 				s.best_sol = s.get_solution_not_visited();
 				s.solutionToNodesSet(s.best_sol);
-			}desabilitado para debugar 14/05/26 */
+			}
 
 			//output.gurobiCallInfo(s); desabilitado para debugar 14/05/26
 			//s.ClearGurobiCallInfo();desabilitado para debugar 14/05/26
@@ -227,13 +228,14 @@ int main(int argc, char **argv)
 			//s.ClearPredictionInfo(); //desabilitado para debugar 14/05/26
 			n = 1;
 			m++;
-		}
+		}*/
 		//end = std::chrono::system_clock::now();desabilitado para debugar 14/05/26
 		//std::chrono::duration<double> duration_time = end - start; desabilitado para debugar 14/05/26
-		/*std::cout << "secs : " << duration_time.count() << " s\n";
+		//std::cout << "secs : " << duration_time.count() << " s\n";
 
-		output.writeParetoSet(s, program_name, fileName, datetime(), duration_time.count(), targetsNum, s.paretoSetValidation(),
-							  exec, input.getNExec(), input.getM(), input.getN(), cvl_subset_num); desabilitado para debugar 14/05/26*/ 
+		//output.writeParetoSet(s, program_name, fileName, datetime(), duration_time.count(), targetsNum, s.paretoSetValidation(),
+		//					  exec, input.getNExec(), input.getM(), input.getN(), cvl_subset_num); desabilitado para debugar 14/05/26
+		//					  8/
 		m = 1;
 		std::cout << "[EXEC " << exec << "] Finished. m=" << m << " n=" << n << std::endl;
 

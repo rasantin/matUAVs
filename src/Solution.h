@@ -86,7 +86,7 @@
 		Rand rand;
 		path bestPath(SolverContext& ctx,int gID);
 		path milpSolver(SolverContext& ctx, const Set& coverage_set, const path& initial_sol = path());
-		path milpSolverSafe(SolverContext &ctx, const Set &nodes_set, const path &initial_sol = path());
+		void milp_test();
 
 		path improvePath(SolverContext& ctx, path p);
 

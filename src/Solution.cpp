@@ -10,6 +10,9 @@
 #include <iomanip>
 #include <cassert>
 #include <csignal>
+#include <unistd.h>
+
+#include <sstream>
 
 #include <cstdlib>
 
@@ -269,7 +272,7 @@ void Solution::initSol(SolverContext &ctx, solution *s)
 	// - maxTime: maior tempo de otimização do Gurobi (para definir limites)
 	// - cost: custo acumulado de todos os caminhos
 
-	double maxValue = std::numeric_limits<double>::min(); // Menor valor possível para comparação
+	double maxValue = -1;
 	double maxTime = -1;
 	double cost = 0;
 	int maxCostPathID = 0;
@@ -316,18 +319,23 @@ void Solution::initSol(SolverContext &ctx, solution *s)
 	}
 
 	// Atribuir como limite tempo o tempo do grupo que demandou mais tempo para executar
-	gurobi_time_limit = maxTime;
+	if (maxTime > 0)
+		gurobi_time_limit = maxTime;
+	else
+		gurobi_time_limit = 300.0;
 
 	// solTemp.paths.insert(solTemp.paths.begin(), paths.begin(), paths.end());
 	solTemp.paths = move(paths);
 
 	// O vetor depots não inclui a base (não será modificada em shift/swap)
-	solTemp.depots = move(globalDepots);
-	solTemp.depotsNum = globalDepots.size() + 1; // +1 para incluir a base (não presente em globalDepots)
+	// solTemp.depots = move(globalDepots);
+	// solTemp.depotsNum = globalDepots.size() + 1; // +1 para incluir a base (não presente em globalDepots)
+
+	solTemp.depotsNum = solTemp.depots.size() + 1; // usa solTemp.depots, não globalDepots
 	solTemp.maxCost = maxValue;
 	solTemp.sCost = cost;
 	solTemp.maxCostPathID = maxCostPathID;
-	*s = solTemp;
+	*s = std::move(solTemp);
 }
 
 Solution::~Solution()
@@ -364,23 +372,22 @@ Solution::path Solution::bestPath(SolverContext &ctx, int gID)
 		set_temp = nodesSets[gID];
 
 		sol = milpSolver(ctx, set_temp, {});
-
 		// muitas chamadas do gurobi, manteremos apenas a informação da última
 		// vec_call.clear();
 
-		call_info.call_id = ++call_num;
-		call_info.T = T;
-		call_info.D = D;
-		call_info.optimize_time = gurobi_optimize_time;
-		call_info.type = "normal";
-		if (sol.pCost > 0)
-			call_info.feasible = true;
-		else
-			call_info.feasible = false;
+		// call_info.call_id = ++call_num;
+		// call_info.T = T;
+		// call_info.D = D;
+		// call_info.optimize_time = gurobi_optimize_time;
+		// call_info.type = "normal";
+		// if (sol.pCost > 0)
+		// call_info.feasible = true;
+		// else
+		// call_info.feasible = false;
 
-		vec_call.emplace_back(call_info);
+		// vec_call.emplace_back(call_info);
 	}
-	else
+	/*else
 	{
 
 		while (it_sub_set != nodesSets[gID].sub_set.end())
@@ -394,24 +401,23 @@ Solution::path Solution::bestPath(SolverContext &ctx, int gID)
 
 			// calcular a solução
 			// sol = MILP(set_temp);
-			//sol = milpSolver(ctx, set_temp, {});
-			sol = milpSolverSafe(ctx, set_temp, {});
+			sol = milpSolver(ctx, set_temp, {});
 
 			// muitas chamadas do gurobi, materemos apenas a informação da última
 			// vec_call.clear();
-			call_info.call_id = ++call_num;
-			call_info.T = set_temp.cvLines.size() * 2;
-			call_info.D = set_temp.depots.size() + 1;
-			call_info.optimize_time = gurobi_optimize_time;
-			call_info.type = "normal";
+			// call_info.call_id = ++call_num;
+			// call_info.T = set_temp.cvLines.size() * 2;
+			// call_info.D = set_temp.depots.size() + 1;
+			// call_info.optimize_time = gurobi_optimize_time;
+			// call_info.type = "normal";
 
-			if (sol.pCost > 0)
-				call_info.feasible = true;
-			else
-				call_info.feasible = false;
+			// if (sol.pCost > 0)
+			// call_info.feasible = true;
+			// else
+			// call_info.feasible = false;
 
 			// adicionar as informções da chamada do gurobi no vetor
-			vec_call.emplace_back(call_info);
+			// vec_call.emplace_back(call_info);
 
 			if (sol.pCost < 0)
 				return sol;
@@ -423,35 +429,50 @@ Solution::path Solution::bestPath(SolverContext &ctx, int gID)
 			++it_sub_set;
 		}
 
-		sol = Union_Solutions(vec_sol);
+		//sol = Union_Solutions(vec_sol);
+
+		set_temp = nodesSets[gID];
 
 		if (sol.pCost < 0)
 			return sol;
 
+		// Valida arestas antes de passar ao Gurobi
+		bool sol_valid = true;
+		for (const auto &e : sol.edges)
+		{
+			if (e.node_a < 0 || e.node_b < 0)
+			{
+				sol_valid = false;
+				break;
+			}
+		}
+
+		// se inválido, chama sem warm start
+		//if (!sol_valid)
+		//	sol = milpSolver(ctx, set_temp, {});
+		//else
+		//	sol = milpSolver(ctx, set_temp, sol);
+
 		// covert path to nodeSets
 		// set_temp = PathToNodesSet(sol);
-		set_temp = nodesSets[gID];
-
-		// pass to gurobi as warm start
-		// sol = MILP_Warm_Start(set_temp, sol);
-		sol = milpSolverSafe(ctx, set_temp, sol);
 
 		// vec_call.clear();
-		call_info.call_id = ++call_num;
-		call_info.T = set_temp.cvLines.size() * 2;
-		call_info.D = set_temp.depots.size() + 1;
-		call_info.optimize_time = gurobi_optimize_time;
-		call_info.type = "Warm_Start";
-		if (sol.pCost > 0)
-			call_info.feasible = true;
-		else
-			call_info.feasible = false;
+		//call_info.call_id = ++call_num;
+		//call_info.T = set_temp.cvLines.size() * 2;
+		//call_info.D = set_temp.depots.size() + 1;
+		//call_info.optimize_time = gurobi_optimize_time;
+		//call_info.type = "Warm_Start";
+		//if (sol.pCost > 0)
+			//call_info.feasible = true;
+		//else
+			//call_info.feasible = false;
 
-		vec_call.emplace_back(call_info);
-	}
+		//vec_call.emplace_back(call_info);
+	}*/
 	//---------------------teste temporário saída -------------------------------------
-	/*if(!PathRestrictions(sol))
-				cout << "solução não validada:Best Path" <<endl;*/
+	
+	//if(!PathRestrictions(sol))
+		//		std::cout << "solução não validada:Best Path" <<std::endl;
 
 	return sol;
 }
@@ -482,8 +503,7 @@ Solution::path Solution::improvePath(SolverContext &ctx, path p)
 	// setID = nodesSets[gID].set_id;
 	set_temp = nodesSets[gID];
 
-	//sol = milpSolver(ctx, set_temp, p);
-	sol = milpSolverSafe(ctx, set_temp, p);
+	sol = milpSolver(ctx, set_temp, p);
 
 	call_info.call_id = ++call_num;
 	call_info.T = set_temp.cvLines.size() * 2;
@@ -504,89 +524,181 @@ Solution::path Solution::improvePath(SolverContext &ctx, path p)
 	return sol;
 }
 
-Solution::path Solution::milpSolverSafe(SolverContext &ctx, const Set &nodes_set, const path &initial_sol)
+void Solution::milp_test()
 {
-    static std::vector<Set> valid_inputs;
-    static std::vector<path> valid_results;
-    static int call_count = 0;
-    static bool pool_ready = false;
 
-    call_count++;
+	// GRBEnv *env = 0;
+	GRBVar *Elem = 0;
+	int e, i, status, nSolutions;
 
-    // Fase de coleta: acumular 100 entradas válidas
-    if (!pool_ready)
-    {
-        path result;
-        result.pCost = -1;
+	try
+	{
+		std::srand(12345);
 
-        try
-        {
-            result = milpSolver(ctx, nodes_set, initial_sol);
-            if (result.pCost > 0)
-            {
-                valid_inputs.push_back(nodes_set);
-                valid_results.push_back(result);
-                std::cerr << "[POOL] " << valid_inputs.size() << "/100 coletadas\n";
-            }
-            else
-            {
-                std::cerr << "[POOL] pCost<0 call=" << call_count << "\n";
-            }
-        }
-        catch (...)
-        {
-            std::cerr << "[POOL] CRASH durante coleta call=" << call_count << "\n";
-        }
+		// Sample data
+		const int groundSetSize = 2000;
+		const int nSubsets = 100;
+		// const int Budget        = 12;
+		int Budget = groundSetSize * (20 + std::rand() % 40) / 100;
 
-        if ((int)valid_inputs.size() >= 30)
-        {
-            pool_ready = true;
-            std::cerr << "[POOL] Pool pronto com " << valid_inputs.size() << " entradas válidas\n";
-        }
+		std::vector<std::vector<double>> Set(nSubsets,
+											 std::vector<double>(groundSetSize));
 
-        return result;
-    }
+		for (int i = 0; i < nSubsets; i++)
+		{
+			for (int e = 0; e < groundSetSize; e++)
+			{
+				if (std::rand() % 100 < 40)
+					Set[i][e] = 1 + std::rand() % 20;
+				else
+					Set[i][e] = 0;
+			}
+		}
+		/* double Set[][20] =
+		 { { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+		   { 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1 },
+		   { 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0 },
+		   { 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0 } };
+		   */
+		// int    SetObjPriority[] = {3, 2, 2, 1};
+		// double SetObjWeight[]   = {1.0, 0.25, 1.25, 1.0};
 
-    // Fase de teste: usar entradas do pool
-    if (valid_inputs.empty())
-    {
-        pool_ready = false;
-        std::cerr << "[POOL] Pool vazio — reiniciando coleta\n";
-        path sol; sol.pCost = -1;
-        return sol;
-    }
+		int SetObjPriority[nSubsets];
+		double SetObjWeight[nSubsets];
 
-    int idx = std::rand() % (int)valid_inputs.size();
+		for (int i = 0; i < nSubsets; i++)
+		{
+			SetObjPriority[i] = 1 + std::rand() % 5;
 
-    std::cerr << "[TEST] Testando idx=" << idx
-              << " robotID=" << valid_inputs[idx].robotID
-              << " depots=" << valid_inputs[idx].depots.size() << "\n";
+			SetObjWeight[i] =
+				0.1 + (std::rand() % 500) / 100.0;
+		}
 
-    try
-    {
-        path result = milpSolver(ctx, valid_inputs[idx], valid_results[idx]);
-        if (result.pCost > 0)
-            std::cerr << "[TEST] OK idx=" << idx << "\n";
-        else
-            std::cerr << "[TEST] pCost<0 idx=" << idx << "\n";
-    }
-    catch (...)
-    {
-        std::cerr << "[TEST] CRASH em entrada válida idx=" << idx << "\n";
-        valid_inputs.erase(valid_inputs.begin() + idx);
-        valid_results.erase(valid_results.begin() + idx);
+		// Create environment
+		// env = new GRBEnv("multiobj_c++.log");
 
-        if (valid_inputs.empty())
-        {
-            pool_ready = false;
-            std::cerr << "[POOL] Pool vazio — reiniciando coleta\n";
-        }
-    }
+		GRBEnv env = GRBEnv(true);
 
-    // Retornar INVÁLIDO — MOVNS rejeita e continua
-    path sol;
-    sol.pCost = -1;
-    return sol;
+		env.set(GRB_IntParam_OutputFlag, 0);
+
+		env.start();
+
+		env.set(GRB_IntParam_OutputFlag, 0);
+
+		// Create initial model
+		// GRBModel model = GRBModel(*env);
+		GRBModel model(env);
+		model.set(GRB_StringAttr_ModelName, "multiobj_c++");
+
+		// Initialize decision variables for ground set:
+		// x[e] == 1 if element e is chosen for the covering.
+		Elem = model.addVars(groundSetSize, GRB_BINARY);
+		for (e = 0; e < groundSetSize; e++)
+		{
+			std::ostringstream vname;
+			vname << "El" << e;
+			Elem[e].set(GRB_StringAttr_VarName, vname.str());
+		}
+
+		// Constraint: limit total number of elements to be picked to be at most
+		// Budget
+		GRBLinExpr lhs;
+		lhs = 0;
+		for (e = 0; e < groundSetSize; e++)
+		{
+			lhs += Elem[e];
+		}
+		model.addConstr(lhs == Budget, "Budget");
+
+		// Set global sense for ALL objectives
+		model.set(GRB_IntAttr_ModelSense, GRB_MAXIMIZE);
+
+		// Limit how many solutions to collect
+		model.set(GRB_IntParam_PoolSolutions, 100);
+
+		// Set and configure i-th objective
+		for (i = 0; i < nSubsets; i++)
+		{
+			GRBLinExpr objn = 0;
+			for (e = 0; e < groundSetSize; e++)
+				objn += Set[i][e] * Elem[e];
+			std::ostringstream vname;
+			vname << "Set" << i;
+
+			model.setObjectiveN(objn, i, SetObjPriority[i], SetObjWeight[i],
+								1.0 + i, 0.01, vname.str());
+		}
+
+		// Save problem
+		// model.write("multiobj_c++.lp");
+
+		// Optimize
+		model.optimize();
+
+		// Status checking
+		status = model.get(GRB_IntAttr_Status);
+
+		if (status == GRB_INF_OR_UNBD ||
+			status == GRB_INFEASIBLE ||
+			status == GRB_UNBOUNDED)
+		{
+			std::cout << "The model cannot be solved " << "because it is infeasible or unbounded" << std::endl;
+			// return 1;
+		}
+		if (status != GRB_OPTIMAL)
+		{
+			std::cout << "Optimization was stopped with status " << status << std::endl;
+			// return 1;
+		}
+
+		// Print best selected set
+		std::cout << "Selected elements in best solution:" << std::endl
+				  << "\t";
+		for (e = 0; e < groundSetSize; e++)
+		{
+			if (Elem[e].get(GRB_DoubleAttr_X) < .9)
+				continue;
+			std::cout << " El" << e;
+		}
+		std::cout << std::endl;
+
+		// Print number of solutions stored
+		nSolutions = model.get(GRB_IntAttr_SolCount);
+		std::cout << "Number of solutions found: " << nSolutions << std::endl;
+
+		// Print objective values of solutions
+		if (nSolutions > 10)
+			nSolutions = 10;
+		std::cout << "Objective values for first " << nSolutions;
+		std::cout << " solutions:" << std::endl;
+		for (i = 0; i < nSubsets; i++)
+		{
+			model.set(GRB_IntParam_ObjNumber, i);
+
+			std::cout << "\tSet" << i;
+			for (e = 0; e < nSolutions; e++)
+			{
+				std::cout << " ";
+				model.set(GRB_IntParam_SolutionNumber, e);
+				double val = model.get(GRB_DoubleAttr_ObjNVal);
+				std::cout << std::setw(6) << val;
+			}
+			std::cout << std::endl;
+		}
+	}
+	catch (GRBException e)
+	{
+		std::cout << "Error code = " << e.getErrorCode() << std::endl;
+		std::cout << e.getMessage() << std::endl;
+	}
+	catch (...)
+	{
+		std::cout << "Exception during optimization" << std::endl;
+	}
+
+	// Free environment/vars
+	delete[] Elem;
+	// delete env;
 }
 
 // MILP solver for coverage set
@@ -594,6 +706,9 @@ Solution::path Solution::milpSolverSafe(SolverContext &ctx, const Set &nodes_set
 Solution::path Solution::milpSolver(SolverContext &ctx, const Set &nodes_set, const path &initial_sol)
 {
 	int i, j;
+
+	static int call_count = 0;
+	call_count++;
 
 	// Convert node set to the input format required by the MILP model
 	Convert_NS_to_CS(nodes_set);
@@ -626,7 +741,7 @@ Solution::path Solution::milpSolver(SolverContext &ctx, const Set &nodes_set, co
 		if (mapNodesTypes[d] != 0)
 		{
 			std::cout << "ERRO: depot invalido: " << d << std::endl;
-			exit(1);
+			throw std::runtime_error("mensagem do erro");
 		}
 	}
 	std::chrono::time_point<std::chrono::system_clock> start, end;
@@ -638,23 +753,16 @@ Solution::path Solution::milpSolver(SolverContext &ctx, const Set &nodes_set, co
 	// Begin model construction
 	try
 	{
-		// GRBModel model(ctx.env());
-
-		GRBEnv localEnv(true);
-		localEnv.set(GRB_IntParam_OutputFlag, 0);
-		localEnv.set(GRB_IntParam_Threads, 1);
-		localEnv.start();
-		GRBModel model(localEnv);
+		GRBModel model(ctx.env());
 
 		// Gurobi performance parameters
 		model.set(GRB_IntParam_LazyConstraints, 0);
 
 		// Parâmetros conservadores — compatíveis com lazy constraints
 		model.set(GRB_IntParam_NumericFocus, 1);
-		model.set(GRB_IntParam_Presolve, 1);
 		model.set(GRB_IntParam_ScaleFlag, 1);
-		model.set(GRB_DoubleParam_MIPGap, 0.01);
-		model.set(GRB_IntParam_Method, 2);  // dual simplex
+		model.set(GRB_DoubleParam_TimeLimit, 300.0);
+		model.set(GRB_IntParam_Threads, 1);
 
 		// =============================
 		// Validação dos parâmetros
@@ -663,13 +771,13 @@ Solution::path Solution::milpSolver(SolverContext &ctx, const Set &nodes_set, co
 		if (D <= 0)
 		{
 			std::cout << "Erro: D invalido = " << D << std::endl;
-			exit(1);
+			throw std::runtime_error("mensagem do erro");
 		}
 
 		if (N <= 0)
 		{
 			std::cout << "Erro: N invalido = " << N << std::endl;
-			exit(1);
+			throw std::runtime_error("mensagem do erro");
 		}
 
 		// =============================
@@ -1224,10 +1332,8 @@ Solution::path Solution::milpSolver(SolverContext &ctx, const Set &nodes_set, co
 		model.set(GRB_DoubleParam_MIPGap, 0.01);
 
 		model.set(GRB_IntParam_OutputFlag, 1);
-		// model.set(GRB_IntParam_LogToConsole, 1);
 		model.set(GRB_IntParam_Threads, 1);
 
-	
 		// Se não há depots variáveis, modelo não faz sentido
 		if (D <= 1 || vars_d.empty())
 		{
@@ -1236,20 +1342,10 @@ Solution::path Solution::milpSolver(SolverContext &ctx, const Set &nodes_set, co
 		}
 		model.update();
 
-		bool suspicious = (robotID < 0 || nodes_set.cvLines.empty());
-
-		if (suspicious)
-		{
-			auto now = std::chrono::system_clock::now().time_since_epoch().count();
-			std::string name = "bug_" + std::to_string(now) + ".lp";
-			model.write(name);
-			model.set(GRB_IntParam_LogToConsole, 1);
-		}
-
 		// model.write("debug_last.lp");
 
-		//cb = std::make_unique<subtourelim>(vars_x, vars_d, baseId);
-		//model.setCallback(cb.get());
+		// cb = std::make_unique<subtourelim>(vars_x, vars_d, baseId);
+		// model.setCallback(cb.get());
 
 		// Start measuring optimization time
 		start = std::chrono::system_clock::now();
@@ -1265,13 +1361,39 @@ Solution::path Solution::milpSolver(SolverContext &ctx, const Set &nodes_set, co
 				if (!std::isfinite(cost))
 				{
 					std::cerr << "COST INVALIDO i=" << i << " j=" << j << std::endl;
-					exit(1);
+					throw std::runtime_error("mensagem do erro");
 				}
 			}
 		}
 
 		// Salvar em RAM, não no SSD
 		model.write("/dev/shm/last_before_optimize.lp");
+
+		try
+		{
+			// Verifica integridade do modelo
+			model.update();
+
+			int nvars = model.get(GRB_IntAttr_NumVars);
+			int nconstrs = model.get(GRB_IntAttr_NumConstrs);
+
+			std::cerr << "[PRE-OPT] call=" << call_count
+					  << " nvars=" << nvars
+					  << " nconstrs=" << nconstrs
+					  << " N=" << N
+					  << " D=" << D << "\n";
+
+			assert(nvars > 0);
+			assert(nconstrs > 0);
+			assert(nvars == (int)model.get(GRB_IntAttr_NumVars));
+		}
+		catch (GRBException &e)
+		{
+			std::cerr << "[PRE-OPT] modelo corrompido: "
+					  << e.getMessage() << "\n";
+			sol.pCost = -1;
+			return sol;
+		}
 
 		try
 		{
@@ -1308,11 +1430,13 @@ Solution::path Solution::milpSolver(SolverContext &ctx, const Set &nodes_set, co
 			std::cerr << "Erro ao obter status: " << e.getMessage() << "\n";
 			sol.pCost = -1;
 			model.setCallback(nullptr);
-			//cb.reset();
+			// cb.reset();
 			return sol;
 		}
+
 		// End time measurement
 		end = std::chrono::system_clock::now();
+		std::cerr << "[milpSolver] status final=" << optimstatus << "\n";
 
 		// Calculate and store the elapsed time in milliseconds for the optimization process
 		gurobi_optimize_time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
@@ -1446,16 +1570,16 @@ Solution::path Solution::milpSolver(SolverContext &ctx, const Set &nodes_set, co
 			sol.pID = -1;
 		}
 
-		model.setCallback(nullptr);
-		// Manual memory deallocation for dynamically allocated GRBVar arrays
-		// vars_x, vars_d, vars_z are 2D/1D arrays of GRBVar used in the model
-		// for (int i = 0; i < N; i++)
+		// model.setCallback(nullptr);
+		//  Manual memory deallocation for dynamically allocated GRBVar arrays
+		//  vars_x, vars_d, vars_z are 2D/1D arrays of GRBVar used in the model
+		//  for (int i = 0; i < N; i++)
 		//	delete[] vars_x[i];
-		// delete[] vars_x;
+		//  delete[] vars_x;
 		//	delete[] vars_d;
-		// for (int i = 0; i < N; i++)
+		//  for (int i = 0; i < N; i++)
 		//	delete[] vars_z[i];
-		// delete[] vars_z;
+		//  delete[] vars_z;
 	}
 	catch (GRBException &e)
 	{
